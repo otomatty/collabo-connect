@@ -1,16 +1,46 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Settings, MessageSquare, ClipboardList, Sparkles } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Settings, MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import { currentUser, mockPostings, mockQuestions } from "@/lib/mockData";
+import { toast } from "@/hooks/use-toast";
 
 export default function MyPage() {
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(currentUser.name);
+  const [role, setRole] = useState(currentUser.role);
+  const [area, setArea] = useState(currentUser.area);
+  const [tags, setTags] = useState(currentUser.tags);
+  const [newTag, setNewTag] = useState("");
+  const [aiIntro, setAiIntro] = useState(currentUser.aiIntro);
+
   const myPostings = mockPostings.filter(
     (p) => p.creatorId === currentUser.id || p.participants.some((pt) => pt.userId === currentUser.id)
   );
+
+  const handleSave = () => {
+    setIsEditing(false);
+    toast({ title: "プロフィールを更新しました" });
+  };
+
+  const handleAddTag = () => {
+    const tag = newTag.trim();
+    if (tag && !tags.includes(tag)) {
+      setTags([...tags, tag.startsWith("#") ? tag : `#${tag}`]);
+      setNewTag("");
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(tags.filter((t) => t !== tagToRemove));
+  };
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
@@ -18,19 +48,19 @@ export default function MyPage() {
         title="マイページ"
         hideAvatar
         action={
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <Settings className="h-5 w-5" />
+          <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setIsEditing(true)}>
+            <Pencil className="h-5 w-5" />
           </Button>
         }
       />
 
       {/* Profile */}
       <div className="flex items-center gap-4">
-        <UserAvatar name={currentUser.name} className="h-16 w-16 text-xl" />
+        <UserAvatar name={name} className="h-16 w-16 text-xl" />
         <div className="space-y-1">
-          <h2 className="text-lg font-bold">{currentUser.name}</h2>
-          <p className="text-sm text-muted-foreground">{currentUser.role}</p>
-          <p className="text-xs text-muted-foreground">{currentUser.area} ・ {currentUser.joinedDate} 入社</p>
+          <h2 className="text-lg font-bold">{name}</h2>
+          <p className="text-sm text-muted-foreground">{role}</p>
+          <p className="text-xs text-muted-foreground">{area} ・ {currentUser.joinedDate} 入社</p>
         </div>
       </div>
 
@@ -40,7 +70,7 @@ export default function MyPage() {
           <Sparkles className="h-4 w-4 text-primary" /> AI生成タグ
         </h3>
         <div className="flex flex-wrap gap-2">
-          {currentUser.tags.map((tag) => (
+          {tags.map((tag) => (
             <Badge key={tag} variant="secondary" className="rounded-full">
               {tag}
             </Badge>
@@ -52,7 +82,7 @@ export default function MyPage() {
       <Card className="border-primary/20 bg-warm-light/30">
         <CardContent className="p-4 space-y-1">
           <p className="text-sm font-semibold">✨ あなたの紹介文</p>
-          <p className="text-sm text-foreground/80 leading-relaxed">{currentUser.aiIntro}</p>
+          <p className="text-sm text-foreground/80 leading-relaxed">{aiIntro}</p>
         </CardContent>
       </Card>
 
@@ -92,6 +122,72 @@ export default function MyPage() {
           </Link>
         ))}
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditing} onOpenChange={setIsEditing}>
+        <DialogContent className="max-w-md mx-auto max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>プロフィール編集</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">名前</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">役職</label>
+              <Input value={role} onChange={(e) => setRole(e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">エリア</label>
+              <Input value={area} onChange={(e) => setArea(e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">タグ</label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="rounded-full flex items-center gap-1 pr-1">
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTag(tag)}
+                      className="rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="新しいタグを追加"
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddTag())}
+                  className="flex-1"
+                />
+                <Button type="button" size="icon" variant="outline" onClick={handleAddTag}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">紹介文</label>
+              <Textarea value={aiIntro} onChange={(e) => setAiIntro(e.target.value)} rows={4} />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsEditing(false)}>キャンセル</Button>
+            <Button onClick={handleSave}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
