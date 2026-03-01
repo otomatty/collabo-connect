@@ -13,11 +13,8 @@ import { currentUser } from "@/lib/mockData";
 
 interface AppHeaderProps {
   title: string;
-  /** Show back arrow; if string, navigates to that path; if true, navigates -1 */
   back?: boolean | string;
-  /** Right-side action element (e.g. a create button), rendered before avatar */
   action?: React.ReactNode;
-  /** Hide the user avatar menu (e.g. on MyPage where profile is already shown) */
   hideAvatar?: boolean;
 }
 
@@ -33,14 +30,14 @@ export default function AppHeader({ title, back, action, hideAvatar }: AppHeader
   };
 
   return (
-    <header className="flex items-center gap-2 pb-2">
+    <header className="flex items-center gap-2 pb-1">
       {back && (
-        <Button variant="ghost" size="icon" className="rounded-full shrink-0 -ml-2" onClick={handleBack}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button variant="ghost" size="icon" className="shrink-0 -ml-2 h-8 w-8" onClick={handleBack}>
+          <ArrowLeft className="h-4 w-4" />
         </Button>
       )}
 
-      <h1 className="text-xl font-bold flex-1 truncate">{title}</h1>
+      <h1 className="text-lg font-semibold flex-1 truncate">{title}</h1>
 
       {action && <div className="shrink-0">{action}</div>}
 
@@ -48,7 +45,7 @@ export default function AppHeader({ title, back, action, hideAvatar }: AppHeader
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shrink-0">
-              <UserAvatar name={currentUser.name} className="h-9 w-9 text-sm" />
+              <UserAvatar name={currentUser.name} className="h-8 w-8 text-xs" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

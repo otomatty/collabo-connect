@@ -7,10 +7,10 @@ interface UserAvatarProps {
 }
 
 const colors = [
-  "bg-primary/20 text-primary",
-  "bg-accent/20 text-accent-foreground",
+  "bg-primary/10 text-primary",
+  "bg-accent/10 text-accent",
   "bg-secondary text-secondary-foreground",
-  "bg-warm-light text-warm-dark",
+  "bg-muted text-muted-foreground",
 ];
 
 export default function UserAvatar({ name, className }: UserAvatarProps) {
@@ -20,7 +20,7 @@ export default function UserAvatar({ name, className }: UserAvatarProps) {
   return (
     <div
       className={cn(
-        "flex items-center justify-center rounded-full font-bold",
+        "flex items-center justify-center rounded-full font-medium",
         colors[idx],
         className ?? "h-10 w-10 text-sm"
       )}

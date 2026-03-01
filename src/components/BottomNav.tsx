@@ -22,12 +22,12 @@ export default function BottomNav() {
               key={to}
               to={to}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-3 py-1 text-xs transition-colors",
-                active ? "text-primary" : "text-muted-foreground"
+                "flex flex-col items-center gap-0.5 px-3 py-1 text-[11px] transition-colors",
+                active ? "text-primary font-medium" : "text-muted-foreground"
               )}
             >
-              <Icon className={cn("h-5 w-5", active && "fill-primary/20")} />
-              <span className="font-medium">{label}</span>
+              <Icon className="h-5 w-5" strokeWidth={active ? 2 : 1.5} />
+              <span>{label}</span>
             </NavLink>
           );
         })}
