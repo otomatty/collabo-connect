@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { currentUser, mockPostings, mockQuestions } from "@/lib/mockData";
+import { currentUser, mockPostings, mockQuestions, popularAreas } from "@/lib/mockData";
 import { toast } from "@/hooks/use-toast";
 
 export default function MyPage() {
@@ -189,6 +189,18 @@ export default function MyPage() {
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {popularAreas.filter((a) => !areas.includes(a)).map((a) => (
+                  <Badge
+                    key={a}
+                    variant="outline"
+                    className="rounded-full text-xs font-normal cursor-pointer hover:bg-secondary transition-colors"
+                    onClick={() => setAreas([...areas, a])}
+                  >
+                    + {a}
+                  </Badge>
+                ))}
               </div>
             </div>
 

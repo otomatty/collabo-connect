@@ -13,7 +13,7 @@ import { Check, Sparkles, TrendingUp, MapPin, UserPlus, X, CalendarIcon, Clock }
 import { cn } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { mockUsers, mockPostings, currentUser } from "@/lib/mockData";
+import { mockUsers, mockPostings, currentUser, popularAreas } from "@/lib/mockData";
 
 const categories = [
   { value: "food", label: "🍽️ ごはん・飲み" },
@@ -28,8 +28,6 @@ const suggestedThemes = [
   { title: "AWS勉強会", category: "study" as const },
   { title: "金曜の夜に飲みに行きましょう", category: "food" as const },
 ];
-
-const popularAreas = ["新宿", "渋谷", "品川", "オンライン", "秋葉原", "横浜"];
 
 // Recommend members: those who participated in past events with currentUser, or have matching tags
 function getRecommendedMembers(category: string) {
