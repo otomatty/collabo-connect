@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Calendar, MapPin } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import { mockPostings, mockUsers, getCategoryEmoji, getCategoryLabel, type Posting } from "@/lib/mockData";
 
 export default function BoardPage() {
@@ -15,14 +16,16 @@ export default function BoardPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">グループ募集</h1>
-        <Link to="/board/create">
-          <Button size="sm" className="rounded-full gap-1">
-            <Plus className="h-4 w-4" /> 募集する
-          </Button>
-        </Link>
-      </div>
+      <AppHeader
+        title="グループ募集"
+        action={
+          <Link to="/board/create">
+            <Button size="sm" className="rounded-full gap-1">
+              <Plus className="h-4 w-4" /> 募集する
+            </Button>
+          </Link>
+        }
+      />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full rounded-full bg-secondary">

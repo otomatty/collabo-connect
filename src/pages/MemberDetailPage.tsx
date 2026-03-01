@@ -1,8 +1,9 @@
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Briefcase, MapPin, CalendarDays } from "lucide-react";
+import { Briefcase, MapPin, CalendarDays } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import { mockUsers } from "@/lib/mockData";
 
 export default function MemberDetailPage() {
@@ -20,9 +21,7 @@ export default function MemberDetailPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
-      <Link to="/members" className="flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> メンバー一覧
-      </Link>
+      <AppHeader title={user.name} back="/members" />
 
       <div className="flex flex-col items-center gap-3 text-center">
         <UserAvatar name={user.name} className="h-20 w-20 text-2xl" />

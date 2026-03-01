@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sparkles, Send, Check } from "lucide-react";
+import AppHeader from "@/components/AppHeader";
 import { mockQuestions } from "@/lib/mockData";
 
 interface Message {
@@ -74,10 +75,7 @@ export default function InterviewPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-5 w-5 text-primary" />
-        <h1 className="text-xl font-bold">AIインタビュー</h1>
-      </div>
+      <AppHeader title="AIインタビュー" back />
 
       <div className="space-y-3">
         {messages.map((msg) => (
