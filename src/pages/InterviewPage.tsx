@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles, Send } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Sparkles, Send, Check } from "lucide-react";
 import { mockQuestions } from "@/lib/mockData";
 
 interface Message {
@@ -10,6 +11,7 @@ interface Message {
   type: "question" | "answer";
   content: string;
   options?: string[];
+  multiSelect?: boolean;
 }
 
 export default function InterviewPage() {
@@ -19,36 +21,53 @@ export default function InterviewPage() {
       type: "question",
       content: mockQuestions[0].question,
       options: mockQuestions[0].options,
+      multiSelect: true,
     },
   ]);
   const [freeText, setFreeText] = useState("");
   const [questionIdx, setQuestionIdx] = useState(0);
+  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+
+  const pushNextQuestion = (currentMessages: Message[], nextIdx: number): Message[] => {
+    if (nextIdx < mockQuestions.length) {
+      currentMessages.push({
+        id: `q${nextIdx}`,
+        type: "question",
+        content: mockQuestions[nextIdx].question,
+        options: mockQuestions[nextIdx].options,
+        multiSelect: true,
+      });
+      setQuestionIdx(nextIdx);
+    } else {
+      currentMessages.push({
+        id: "done",
+        type: "question",
+        content: "ありがとうございます！今日の質問は以上です。あなたのプロフィールが更新されました 🎉",
+      });
+    }
+    return currentMessages;
+  };
 
   const handleAnswer = (answer: string) => {
     const newMessages: Message[] = [
       ...messages,
       { id: `a${questionIdx}`, type: "answer", content: answer },
     ];
-
-    const nextIdx = questionIdx + 1;
-    if (nextIdx < mockQuestions.length) {
-      newMessages.push({
-        id: `q${nextIdx}`,
-        type: "question",
-        content: mockQuestions[nextIdx].question,
-        options: mockQuestions[nextIdx].options,
-      });
-      setQuestionIdx(nextIdx);
-    } else {
-      newMessages.push({
-        id: "done",
-        type: "question",
-        content: "ありがとうございます！今日の質問は以上です。あなたのプロフィールが更新されました 🎉",
-      });
-    }
-
-    setMessages(newMessages);
+    setMessages(pushNextQuestion(newMessages, questionIdx + 1));
     setFreeText("");
+    setSelectedOptions([]);
+  };
+
+  const toggleOption = (opt: string) => {
+    setSelectedOptions((prev) =>
+      prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]
+    );
+  };
+
+  const submitSelected = () => {
+    if (selectedOptions.length > 0) {
+      handleAnswer(selectedOptions.join("、"));
+    }
   };
 
   const lastMessage = messages[messages.length - 1];
@@ -76,18 +95,38 @@ export default function InterviewPage() {
               <CardContent className="p-3 space-y-2">
                 <p className="text-sm">{msg.content}</p>
                 {msg.options && msg.id === lastMessage.id && lastMessage.type === "question" && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {msg.options.map((opt) => (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-xs text-muted-foreground">複数選択可</p>
+                    <div className="flex flex-wrap gap-2">
+                      {msg.options.map((opt) => {
+                        const isSelected = selectedOptions.includes(opt);
+                        return (
+                          <Button
+                            key={opt}
+                            variant="outline"
+                            size="sm"
+                            className={`rounded-full text-xs gap-1.5 ${
+                              isSelected
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-card text-card-foreground"
+                            }`}
+                            onClick={() => toggleOption(opt)}
+                          >
+                            {isSelected && <Check className="h-3 w-3" />}
+                            {opt}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    {selectedOptions.length > 0 && (
                       <Button
-                        key={opt}
-                        variant="outline"
                         size="sm"
-                        className="rounded-full border-border bg-card text-card-foreground text-xs"
-                        onClick={() => handleAnswer(opt)}
+                        className="rounded-full w-full mt-1"
+                        onClick={submitSelected}
                       >
-                        {opt}
+                        回答する（{selectedOptions.length}件選択中）
                       </Button>
-                    ))}
+                    )}
                   </div>
                 )}
               </CardContent>
