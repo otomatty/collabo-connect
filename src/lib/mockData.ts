@@ -189,6 +189,8 @@ export const getCategoryLabel = (cat: Posting["category"]) => {
   }
 };
 
+export const popularAreas = ["新宿", "渋谷", "品川", "東京", "横浜", "オンライン", "秋葉原", "中野", "目黒", "川崎"];
+
 export const getCategoryEmoji = (cat: Posting["category"]) => {
   switch (cat) {
     case "food": return "🍽️";
