@@ -4,99 +4,99 @@
 
 @layer base {
   :root {
-    --background: 35 40% 96%;
-    --foreground: 20 20% 15%;
+    --background: 0 0% 98%;
+    --foreground: 220 15% 18%;
 
-    --card: 30 50% 98%;
-    --card-foreground: 20 20% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 15% 18%;
 
-    --popover: 30 50% 98%;
-    --popover-foreground: 20 20% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 15% 18%;
 
-    --primary: 25 95% 53%;
+    --primary: 220 65% 48%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 35 30% 90%;
-    --secondary-foreground: 20 20% 20%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 220 15% 25%;
 
-    --muted: 35 20% 92%;
-    --muted-foreground: 20 10% 45%;
+    --muted: 220 14% 95%;
+    --muted-foreground: 220 10% 46%;
 
-    --accent: 38 90% 55%;
-    --accent-foreground: 20 20% 15%;
+    --accent: 24 70% 50%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 68% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 20% 88%;
-    --input: 30 20% 88%;
-    --ring: 25 95% 53%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 220 65% 48%;
 
-    --radius: 0.75rem;
+    --radius: 0.625rem;
 
-    --sidebar-background: 35 30% 95%;
-    --sidebar-foreground: 20 20% 20%;
-    --sidebar-primary: 25 95% 53%;
+    --sidebar-background: 220 14% 96%;
+    --sidebar-foreground: 220 15% 25%;
+    --sidebar-primary: 220 65% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 35 30% 90%;
-    --sidebar-accent-foreground: 20 20% 20%;
-    --sidebar-border: 30 20% 88%;
-    --sidebar-ring: 25 95% 53%;
+    --sidebar-accent: 220 14% 92%;
+    --sidebar-accent-foreground: 220 15% 25%;
+    --sidebar-border: 220 13% 90%;
+    --sidebar-ring: 220 65% 48%;
 
-    --warm: 25 95% 53%;
-    --warm-light: 35 80% 92%;
-    --warm-dark: 20 80% 40%;
-    --cream: 35 40% 96%;
-    --tag-food: 15 80% 55%;
-    --tag-study: 210 70% 50%;
-    --tag-event: 150 60% 45%;
+    --warm: 24 70% 50%;
+    --warm-light: 24 40% 95%;
+    --warm-dark: 24 60% 38%;
+    --cream: 0 0% 98%;
+    --tag-food: 24 70% 50%;
+    --tag-study: 220 65% 48%;
+    --tag-event: 160 45% 42%;
   }
 
   .dark {
-    --background: 20 20% 10%;
-    --foreground: 35 30% 92%;
+    --background: 220 16% 8%;
+    --foreground: 220 14% 90%;
 
-    --card: 20 18% 14%;
-    --card-foreground: 35 30% 92%;
+    --card: 220 16% 11%;
+    --card-foreground: 220 14% 90%;
 
-    --popover: 20 18% 14%;
-    --popover-foreground: 35 30% 92%;
+    --popover: 220 16% 11%;
+    --popover-foreground: 220 14% 90%;
 
-    --primary: 25 95% 55%;
+    --primary: 220 65% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 20 15% 20%;
-    --secondary-foreground: 35 30% 92%;
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 220 14% 90%;
 
-    --muted: 20 15% 20%;
-    --muted-foreground: 35 15% 60%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 10% 55%;
 
-    --accent: 38 80% 50%;
+    --accent: 24 65% 52%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 30%;
+    --destructive: 0 60% 35%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 20 15% 22%;
-    --input: 20 15% 22%;
-    --ring: 25 95% 55%;
+    --border: 220 14% 18%;
+    --input: 220 14% 18%;
+    --ring: 220 65% 55%;
 
-    --sidebar-background: 20 20% 10%;
-    --sidebar-foreground: 35 30% 92%;
-    --sidebar-primary: 25 95% 55%;
+    --sidebar-background: 220 16% 8%;
+    --sidebar-foreground: 220 14% 90%;
+    --sidebar-primary: 220 65% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 20 15% 20%;
-    --sidebar-accent-foreground: 35 30% 92%;
-    --sidebar-border: 20 15% 22%;
-    --sidebar-ring: 25 95% 55%;
+    --sidebar-accent: 220 14% 16%;
+    --sidebar-accent-foreground: 220 14% 90%;
+    --sidebar-border: 220 14% 18%;
+    --sidebar-ring: 220 65% 55%;
 
-    --warm: 25 95% 55%;
-    --warm-light: 20 30% 20%;
-    --warm-dark: 25 80% 45%;
-    --cream: 20 20% 10%;
-    --tag-food: 15 80% 55%;
-    --tag-study: 210 70% 50%;
-    --tag-event: 150 60% 45%;
+    --warm: 24 65% 52%;
+    --warm-light: 220 14% 14%;
+    --warm-dark: 24 60% 42%;
+    --cream: 220 16% 8%;
+    --tag-food: 24 65% 52%;
+    --tag-study: 220 65% 55%;
+    --tag-event: 160 45% 45%;
   }
 }
 
@@ -106,6 +106,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }

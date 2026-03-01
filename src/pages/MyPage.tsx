@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Settings, MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
+import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import { currentUser, mockPostings, mockQuestions } from "@/lib/mockData";
@@ -49,16 +49,16 @@ export default function MyPage() {
         hideAvatar
         action={
           <Button variant="ghost" size="icon" className="rounded-full" onClick={() => setIsEditing(true)}>
-            <Pencil className="h-5 w-5" />
+            <Pencil className="h-4 w-4" />
           </Button>
         }
       />
 
       {/* Profile */}
       <div className="flex items-center gap-4">
-        <UserAvatar name={name} className="h-16 w-16 text-xl" />
-        <div className="space-y-1">
-          <h2 className="text-lg font-bold">{name}</h2>
+        <UserAvatar name={name} className="h-14 w-14 text-lg" />
+        <div className="space-y-0.5">
+          <h2 className="text-base font-semibold">{name}</h2>
           <p className="text-sm text-muted-foreground">{role}</p>
           <p className="text-xs text-muted-foreground">{area} ・ {currentUser.joinedDate} 入社</p>
         </div>
@@ -66,12 +66,12 @@ export default function MyPage() {
 
       {/* Tags */}
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" /> AI生成タグ
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-accent" /> タグ
         </h3>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="rounded-full">
+            <Badge key={tag} variant="secondary" className="rounded-full text-xs font-normal">
               {tag}
             </Badge>
           ))}
@@ -79,17 +79,17 @@ export default function MyPage() {
       </div>
 
       {/* AI Intro */}
-      <Card className="border-primary/20 bg-warm-light/30">
+      <Card>
         <CardContent className="p-4 space-y-1">
-          <p className="text-sm font-semibold">✨ あなたの紹介文</p>
+          <p className="text-xs font-semibold text-muted-foreground">紹介文</p>
           <p className="text-sm text-foreground/80 leading-relaxed">{aiIntro}</p>
         </CardContent>
       </Card>
 
       {/* Interview history */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-primary" /> 回答履歴
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <MessageSquare className="h-3.5 w-3.5 text-primary" /> 回答履歴
         </h3>
         {mockQuestions.slice(0, 2).map((q) => (
           <Card key={q.id}>
@@ -100,7 +100,7 @@ export default function MyPage() {
           </Card>
         ))}
         <Link to="/interview">
-          <Button variant="outline" className="w-full rounded-xl" size="sm">
+          <Button variant="outline" className="w-full" size="sm">
             インタビューに答える →
           </Button>
         </Link>
@@ -108,12 +108,12 @@ export default function MyPage() {
 
       {/* My postings */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-primary" /> 参加中の募集
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <ClipboardList className="h-3.5 w-3.5 text-primary" /> 参加中の募集
         </h3>
         {myPostings.map((post) => (
           <Link key={post.id} to={`/board/${post.id}`}>
-            <Card className="transition-shadow hover:shadow-md">
+            <Card className="transition-shadow hover:shadow-sm">
               <CardContent className="p-3">
                 <p className="text-sm font-medium">{post.title}</p>
                 <p className="text-xs text-muted-foreground">{post.area} ・ {post.dateUndecided ? "日程未定" : post.date}</p>
@@ -148,9 +148,9 @@ export default function MyPage() {
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium">タグ</label>
-              <div className="flex flex-wrap gap-2 mb-2">
+              <div className="flex flex-wrap gap-1.5 mb-2">
                 {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="rounded-full flex items-center gap-1 pr-1">
+                  <Badge key={tag} variant="secondary" className="rounded-full flex items-center gap-1 pr-1 text-xs font-normal">
                     {tag}
                     <button
                       type="button"
