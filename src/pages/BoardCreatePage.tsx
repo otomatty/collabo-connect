@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, Sparkles, TrendingUp, MapPin, UserPlus, X } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ArrowLeft, Check, Sparkles, TrendingUp, MapPin, UserPlus, X, CalendarIcon, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
 import { mockUsers, mockPostings, currentUser } from "@/lib/mockData";
 
@@ -73,6 +77,10 @@ export default function BoardCreatePage() {
   const [category, setCategory] = useState("food");
   const [title, setTitle] = useState("");
   const [dateUndecided, setDateUndecided] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [showTime, setShowTime] = useState(false);
   const [area, setArea] = useState("");
   const [invitedIds, setInvitedIds] = useState<string[]>([]);
 
@@ -153,20 +161,84 @@ export default function BoardCreatePage() {
             />
           </div>
 
-          {/* Date */}
-          <div className="space-y-2">
+          {/* Date & Time */}
+          <div className="space-y-3">
             <Label>日時</Label>
             <div className="flex items-center gap-3">
-              <Input type="date" disabled={dateUndecided} className="rounded-xl flex-1" />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    disabled={dateUndecided}
+                    className={cn(
+                      "flex-1 justify-start text-left font-normal rounded-xl",
+                      !selectedDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, "yyyy/MM/dd") : "日付を選択"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
               <Button
                 variant={dateUndecided ? "default" : "outline"}
                 size="sm"
                 className="rounded-full shrink-0"
-                onClick={() => setDateUndecided(!dateUndecided)}
+                onClick={() => {
+                  setDateUndecided(!dateUndecided);
+                  if (!dateUndecided) {
+                    setSelectedDate(undefined);
+                    setStartTime("");
+                    setEndTime("");
+                    setShowTime(false);
+                  }
+                }}
               >
                 未定
               </Button>
             </div>
+
+            {!dateUndecided && (
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground gap-1 px-0 hover:text-primary"
+                  onClick={() => setShowTime(!showTime)}
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  {showTime ? "時間を非表示" : "時間を設定する"}
+                </Button>
+                {showTime && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="rounded-xl flex-1"
+                      placeholder="開始"
+                    />
+                    <span className="text-muted-foreground text-sm">〜</span>
+                    <Input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="rounded-xl flex-1"
+                      placeholder="終了"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Area with suggestions */}
