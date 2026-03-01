@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import { mockUsers } from "@/lib/mockData";
 
 export default function MembersPage() {
@@ -21,7 +22,7 @@ export default function MembersPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
-      <h1 className="text-xl font-bold">メンバー</h1>
+      <AppHeader title="メンバー" />
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

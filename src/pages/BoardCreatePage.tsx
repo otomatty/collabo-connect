@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ArrowLeft, Check, Sparkles, TrendingUp, MapPin, UserPlus, X, CalendarIcon, Clock } from "lucide-react";
+import { Check, Sparkles, TrendingUp, MapPin, UserPlus, X, CalendarIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import { mockUsers, mockPostings, currentUser } from "@/lib/mockData";
 
 const categories = [
@@ -99,11 +100,7 @@ export default function BoardCreatePage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5 pb-28">
-      <Link to="/board" className="flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> 戻る
-      </Link>
-
-      <h1 className="text-xl font-bold">募集を作成</h1>
+      <AppHeader title="募集を作成" back="/board" />
 
       {/* Suggested Themes */}
       <Card className="border-dashed border-primary/30 bg-primary/5">

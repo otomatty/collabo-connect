@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Sparkles, ArrowRight, MapPin, Calendar } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import {
   mockQuestions,
   mockPostings,
@@ -26,16 +27,8 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold">おはよう、{currentUser.name.split(" ")[1]}さん 👋</h1>
-          <p className="text-sm text-muted-foreground">今日も良い一日を！</p>
-        </div>
-        <Link to="/mypage">
-          <UserAvatar name={currentUser.name} className="h-10 w-10 text-sm" />
-        </Link>
-      </div>
+      <AppHeader title={`おはよう、${currentUser.name.split(" ")[1]}さん 👋`} />
+      <p className="text-sm text-muted-foreground -mt-4">今日も良い一日を！</p>
 
       {/* Today's AI Question */}
       <Card className="border-primary/20 bg-warm-light/50">

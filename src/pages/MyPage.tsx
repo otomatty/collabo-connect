@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Settings, MessageSquare, ClipboardList, Sparkles } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import { currentUser, mockPostings, mockQuestions } from "@/lib/mockData";
 
 export default function MyPage() {
@@ -13,12 +14,15 @@ export default function MyPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">マイページ</h1>
-        <Button variant="ghost" size="icon" className="rounded-full">
-          <Settings className="h-5 w-5" />
-        </Button>
-      </div>
+      <AppHeader
+        title="マイページ"
+        hideAvatar
+        action={
+          <Button variant="ghost" size="icon" className="rounded-full">
+            <Settings className="h-5 w-5" />
+          </Button>
+        }
+      />
 
       {/* Profile */}
       <div className="flex items-center gap-4">

@@ -3,8 +3,9 @@ import { useParams, Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, MapPin, HandHeart, Clock, Wifi } from "lucide-react";
+import { Calendar, MapPin, HandHeart, Clock, Wifi } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
+import AppHeader from "@/components/AppHeader";
 import { mockPostings, mockUsers, getCategoryEmoji, getCategoryLabel } from "@/lib/mockData";
 
 export default function BoardDetailPage() {
@@ -31,9 +32,7 @@ export default function BoardDetailPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
-      <Link to="/board" className="flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> 一覧に戻る
-      </Link>
+      <AppHeader title={post.title} back="/board" />
 
       <div className="space-y-2">
         <div className="flex items-center gap-2">
@@ -41,7 +40,7 @@ export default function BoardDetailPage() {
           <Badge variant="secondary" className="rounded-full">{getCategoryLabel(post.category)}</Badge>
           {post.isOnline && <Badge variant="outline" className="rounded-full">オンライン</Badge>}
         </div>
-        <h1 className="text-xl font-bold">{post.title}</h1>
+        
       </div>
 
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
