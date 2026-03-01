@@ -16,7 +16,8 @@ export default function MyPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
   const [role, setRole] = useState(currentUser.role);
-  const [area, setArea] = useState(currentUser.area);
+  const [areas, setAreas] = useState(currentUser.areas);
+  const [newArea, setNewArea] = useState("");
   const [tags, setTags] = useState(currentUser.tags);
   const [newTag, setNewTag] = useState("");
   const [aiIntro, setAiIntro] = useState(currentUser.aiIntro);
@@ -60,7 +61,7 @@ export default function MyPage() {
         <div className="space-y-0.5">
           <h2 className="text-base font-semibold">{name}</h2>
           <p className="text-sm text-muted-foreground">{role}</p>
-          <p className="text-xs text-muted-foreground">{area} ・ {currentUser.joinedDate} 入社</p>
+          <p className="text-xs text-muted-foreground">{areas.join("・")} ・ {currentUser.joinedDate} 入社</p>
         </div>
       </div>
 
@@ -142,8 +143,53 @@ export default function MyPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">エリア</label>
-              <Input value={area} onChange={(e) => setArea(e.target.value)} />
+              <label className="text-sm font-medium">活動エリア</label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {areas.map((a) => (
+                  <Badge key={a} variant="secondary" className="rounded-full flex items-center gap-1 pr-1 text-xs font-normal">
+                    {a}
+                    <button
+                      type="button"
+                      onClick={() => setAreas(areas.filter((x) => x !== a))}
+                      className="rounded-full hover:bg-muted p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={newArea}
+                  onChange={(e) => setNewArea(e.target.value)}
+                  placeholder="エリアを追加（例: 東京、渋谷）"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const v = newArea.trim();
+                      if (v && !areas.includes(v)) {
+                        setAreas([...areas, v]);
+                        setNewArea("");
+                      }
+                    }
+                  }}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  onClick={() => {
+                    const v = newArea.trim();
+                    if (v && !areas.includes(v)) {
+                      setAreas([...areas, v]);
+                      setNewArea("");
+                    }
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-1.5">

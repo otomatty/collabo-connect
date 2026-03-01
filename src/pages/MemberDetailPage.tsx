@@ -29,7 +29,7 @@ export default function MemberDetailPage() {
           <h1 className="text-xl font-bold">{user.name}</h1>
           <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground mt-1">
             <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {user.role}</span>
-            <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {user.area}</span>
+            <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {user.areas.join("・")}</span>
           </div>
           <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
             <CalendarDays className="h-3 w-3" /> {user.joinedDate} 入社

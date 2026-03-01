@@ -5,7 +5,7 @@ export interface User {
   name: string;
   avatar: string;
   role: string;
-  area: string;
+  areas: string[];
   tags: string[];
   aiIntro: string;
   joinedDate: string;
@@ -37,7 +37,7 @@ export const mockUsers: User[] = [
     name: "田中 太郎",
     avatar: "",
     role: "フロントエンドエンジニア",
-    area: "新宿",
+    areas: ["新宿", "東京"],
     tags: ["#React", "#TypeScript", "#甘党", "#AWS学習中"],
     aiIntro: "田中さんはReactとTypeScriptを得意とするフロントエンドエンジニアです。最近はAWS認定資格の取得に向けて勉強中で、向上心が強く、チームメンバーからの信頼も厚い方です。",
     joinedDate: "2024-04",
@@ -47,7 +47,7 @@ export const mockUsers: User[] = [
     name: "佐藤 花子",
     avatar: "",
     role: "バックエンドエンジニア",
-    area: "渋谷",
+    areas: ["渋谷", "世田谷"],
     tags: ["#Java", "#Spring", "#ラーメン好き", "#読書家"],
     aiIntro: "佐藤さんはJavaとSpringを軸にしたバックエンド開発のスペシャリストです。丁寧なコードレビューで知られ、後輩の面倒見がとても良い頼れる先輩エンジニアです。",
     joinedDate: "2023-10",
@@ -57,7 +57,7 @@ export const mockUsers: User[] = [
     name: "鈴木 一郎",
     avatar: "",
     role: "インフラエンジニア",
-    area: "品川",
+    areas: ["品川", "川崎"],
     tags: ["#AWS", "#Docker", "#登山", "#コーヒー"],
     aiIntro: "鈴木さんはAWSとDockerに精通したインフラエンジニアです。休日は登山を楽しむアウトドア派で、おいしいコーヒーの淹れ方にもこだわる多趣味な方です。",
     joinedDate: "2024-01",
@@ -67,7 +67,7 @@ export const mockUsers: User[] = [
     name: "山田 美咲",
     avatar: "",
     role: "フルスタックエンジニア",
-    area: "新宿",
+    areas: ["新宿", "中野"],
     tags: ["#Next.js", "#Python", "#猫好き", "#ヨガ"],
     aiIntro: "山田さんはフロントからバックエンドまで幅広く対応できるフルスタックエンジニアです。新しい技術のキャッチアップが早く、社内勉強会の企画にも積極的な方です。",
     joinedDate: "2024-06",
@@ -77,7 +77,7 @@ export const mockUsers: User[] = [
     name: "高橋 健太",
     avatar: "",
     role: "モバイルエンジニア",
-    area: "横浜",
+    areas: ["横浜"],
     tags: ["#Flutter", "#Swift", "#ゲーム好き", "#筋トレ"],
     aiIntro: "高橋さんはFlutterとSwiftを使ったモバイルアプリ開発が得意なエンジニアです。ゲーム開発にも興味があり、個人でインディーゲームを作るほどの情熱家です。",
     joinedDate: "2023-08",
@@ -87,7 +87,7 @@ export const mockUsers: User[] = [
     name: "伊藤 さくら",
     avatar: "",
     role: "QAエンジニア",
-    area: "渋谷",
+    areas: ["渋谷", "目黒"],
     tags: ["#テスト自動化", "#Selenium", "#カフェ巡り", "#写真"],
     aiIntro: "伊藤さんはテスト自動化のスペシャリストで、品質へのこだわりが強いQAエンジニアです。カフェ巡りが趣味で、素敵なカフェの情報をよく共有してくれます。",
     joinedDate: "2024-03",
