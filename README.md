@@ -1,4 +1,4 @@
-# Collabo-Connect
+<h1 align="center">Collabo-Connect</h1>
 
 **AIインタビュー × グループ募集で社内コミュニケーションを活性化するWebアプリ**
 
@@ -134,4 +134,4 @@ supabase/
 
 ## ライセンス
 
-Private
+このプロジェクトは [MIT License](LICENSE) のもとで公開されています。自由に利用・改変・再配布が可能です。詳細は LICENSE ファイルをご確認ください。
