@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
   // 既にログイン済みならホームへ
   useEffect(() => {
@@ -27,12 +26,11 @@ export default function LoginPage() {
     e.preventDefault();
     setAuthLoading(true);
     setErrorMsg("");
-    setSuccessMsg("");
 
     try {
       if (isSignUp) {
         await signUpWithEmail(email, password);
-        setSuccessMsg("確認メールを送信しました。メールボックスを確認してください。");
+        navigate("/signup-success");
       } else {
         await signInWithEmail(email, password);
       }
@@ -87,7 +85,6 @@ export default function LoginPage() {
           </div>
 
           {errorMsg && <p className="text-sm text-destructive">{errorMsg}</p>}
-          {successMsg && <p className="text-sm text-green-600 dark:text-green-500">{successMsg}</p>}
 
           <Button
             type="submit"
@@ -105,7 +102,6 @@ export default function LoginPage() {
             onClick={() => {
               setIsSignUp(!isSignUp);
               setErrorMsg("");
-              setSuccessMsg("");
             }}
           >
             {isSignUp ? "すでにアカウントをお持ちの方はこちらからログイン" : "アカウントを作成する"}

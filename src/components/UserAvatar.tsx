@@ -1,8 +1,10 @@
 import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface UserAvatarProps {
   name: string;
+  url?: string | null;
   className?: string;
 }
 
@@ -13,19 +15,16 @@ const colors = [
   "bg-muted text-muted-foreground",
 ];
 
-export default function UserAvatar({ name, className }: UserAvatarProps) {
-  const idx = name.charCodeAt(0) % colors.length;
-  const initial = name.charAt(0);
+export default function UserAvatar({ name, url, className }: UserAvatarProps) {
+  const idx = name ? name.charCodeAt(0) % colors.length : 0;
+  const initial = name ? name.charAt(0).toUpperCase() : "";
 
   return (
-    <div
-      className={cn(
-        "flex items-center justify-center rounded-full font-medium",
-        colors[idx],
-        className ?? "h-10 w-10 text-sm"
-      )}
-    >
-      {initial || <User className="h-4 w-4" />}
-    </div>
+    <Avatar className={cn(className ?? "h-10 w-10 text-sm")}>
+      {url && <AvatarImage src={url} alt={name} className="object-cover" />}
+      <AvatarFallback className={cn("font-medium", colors[idx])} delayMs={url ? 600 : 0}>
+        {initial || <User className="h-4 w-4" />}
+      </AvatarFallback>
+    </Avatar>
   );
 }
