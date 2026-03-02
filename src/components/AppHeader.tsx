@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import UserAvatar from "@/components/UserAvatar";
-import { currentUser } from "@/lib/mockData";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AppHeaderProps {
   title: string;
@@ -20,6 +20,7 @@ interface AppHeaderProps {
 
 export default function AppHeader({ title, back, action, hideAvatar }: AppHeaderProps) {
   const navigate = useNavigate();
+  const { profile, signOut } = useAuth();
 
   const handleBack = () => {
     if (typeof back === "string") {
@@ -45,13 +46,13 @@ export default function AppHeader({ title, back, action, hideAvatar }: AppHeader
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shrink-0">
-              <UserAvatar name={currentUser.name} className="h-8 w-8 text-xs" />
+              <UserAvatar name={profile?.name ?? ""} className="h-8 w-8 text-xs" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{currentUser.name}</p>
-              <p className="text-xs text-muted-foreground">{currentUser.role}</p>
+              <p className="text-sm font-medium">{profile?.name}</p>
+              <p className="text-xs text-muted-foreground">{profile?.role}</p>
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
@@ -60,7 +61,10 @@ export default function AppHeader({ title, back, action, hideAvatar }: AppHeader
                 マイページ
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+            <DropdownMenuItem
+              className="cursor-pointer text-destructive focus:text-destructive"
+              onClick={signOut}
+            >
               <LogOut className="h-4 w-4 mr-2" />
               ログアウト
             </DropdownMenuItem>

@@ -4,11 +4,19 @@ import { Badge } from "@/components/ui/badge";
 import { Briefcase, MapPin, CalendarDays } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { mockUsers } from "@/lib/mockData";
+import { useProfile } from "@/hooks/useProfiles";
 
 export default function MemberDetailPage() {
   const { id } = useParams();
-  const user = mockUsers.find((u) => u.id === id);
+  const { data: user, isLoading } = useProfile(id);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -32,7 +40,7 @@ export default function MemberDetailPage() {
             <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {user.areas.join("・")}</span>
           </div>
           <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
-            <CalendarDays className="h-3 w-3" /> {user.joinedDate} 入社
+            <CalendarDays className="h-3 w-3" /> {user.joined_date} 入社
           </p>
         </div>
       </div>
@@ -52,7 +60,7 @@ export default function MemberDetailPage() {
           <p className="text-sm font-semibold flex items-center gap-2">
             ✨ AIからの紹介
           </p>
-          <p className="text-sm leading-relaxed text-foreground/80">{user.aiIntro}</p>
+          <p className="text-sm leading-relaxed text-foreground/80">{user.ai_intro}</p>
         </CardContent>
       </Card>
     </div>

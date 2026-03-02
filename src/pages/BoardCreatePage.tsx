@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,13 @@ import { Check, Sparkles, TrendingUp, MapPin, UserPlus, X, CalendarIcon, Clock }
 import { cn } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { mockUsers, mockPostings, currentUser, popularAreas } from "@/lib/mockData";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfiles } from "@/hooks/useProfiles";
+import { useCreatePosting } from "@/hooks/usePostings";
+import { popularAreas } from "@/lib/constants";
+import type { Database } from "@/types/supabase";
+
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 const categories = [
   { value: "food", label: "🍽️ ごはん・飲み" },
@@ -29,21 +35,8 @@ const suggestedThemes = [
   { title: "金曜の夜に飲みに行きましょう", category: "food" as const },
 ];
 
-// Recommend members: those who participated in past events with currentUser, or have matching tags
-function getRecommendedMembers(category: string) {
-  const pastCoMembers = new Set<string>();
-  mockPostings.forEach((p) => {
-    const isCurrentUserInvolved =
-      p.creatorId === currentUser.id ||
-      p.participants.some((pt) => pt.userId === currentUser.id);
-    if (isCurrentUserInvolved) {
-      if (p.creatorId !== currentUser.id) pastCoMembers.add(p.creatorId);
-      p.participants.forEach((pt) => {
-        if (pt.userId !== currentUser.id) pastCoMembers.add(pt.userId);
-      });
-    }
-  });
-
+// Recommend members based on matching tags
+function getRecommendedMembers(category: string, profiles: Profile[], currentUserId: string) {
   const categoryTagMap: Record<string, string[]> = {
     food: ["ラーメン", "甘党", "カフェ", "飲み"],
     study: ["React", "AWS", "TypeScript", "Java", "Python", "Flutter", "テスト"],
@@ -51,20 +44,15 @@ function getRecommendedMembers(category: string) {
   };
   const relevantKeywords = categoryTagMap[category] || [];
 
-  return mockUsers
-    .filter((u) => u.id !== currentUser.id)
+  return profiles
+    .filter((u) => u.id !== currentUserId)
     .map((u) => {
       let score = 0;
-      if (pastCoMembers.has(u.id)) score += 3;
       const hasRelevantTag = u.tags.some((tag) =>
         relevantKeywords.some((kw) => tag.includes(kw))
       );
       if (hasRelevantTag) score += 2;
-      const reason = pastCoMembers.has(u.id)
-        ? "以前一緒に参加"
-        : hasRelevantTag
-        ? "興味が近い"
-        : null;
+      const reason = hasRelevantTag ? "興味が近い" : null;
       return { user: u, score, reason };
     })
     .filter((r) => r.score > 0)
@@ -73,8 +61,13 @@ function getRecommendedMembers(category: string) {
 
 export default function BoardCreatePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { data: profiles } = useProfiles();
+  const createPosting = useCreatePosting();
+
   const [category, setCategory] = useState("food");
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [dateUndecided, setDateUndecided] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [startTime, setStartTime] = useState("");
@@ -83,7 +76,7 @@ export default function BoardCreatePage() {
   const [area, setArea] = useState("");
   const [invitedIds, setInvitedIds] = useState<string[]>([]);
 
-  const recommended = getRecommendedMembers(category);
+  const recommended = getRecommendedMembers(category, profiles ?? [], user?.id ?? "");
 
   const toggleInvite = (userId: string) => {
     setInvitedIds((prev) =>
@@ -94,6 +87,23 @@ export default function BoardCreatePage() {
   const applyTheme = (theme: typeof suggestedThemes[0]) => {
     setTitle(theme.title);
     setCategory(theme.category);
+  };
+
+  const handleSubmit = () => {
+    if (!user || !title.trim() || !area.trim()) return;
+    createPosting.mutate(
+      {
+        title: title.trim(),
+        category: category as "food" | "study" | "event",
+        date: selectedDate ? format(selectedDate, "yyyy-MM-dd") : null,
+        date_undecided: dateUndecided,
+        area: area.trim(),
+        is_online: area === "オンライン",
+        description: description.trim(),
+        creator_id: user.id,
+      },
+      { onSuccess: () => navigate("/board") }
+    );
   };
 
   return (
@@ -266,6 +276,8 @@ export default function BoardCreatePage() {
             <Label htmlFor="desc">概要</Label>
             <Textarea
               id="desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder="どんな集まりか、気軽に書いてください！"
               className="rounded-xl min-h-[100px]"
             />
@@ -286,7 +298,7 @@ export default function BoardCreatePage() {
               <p className="text-xs text-muted-foreground">招待中（{invitedIds.length}人）</p>
               <div className="flex flex-wrap gap-2">
                 {invitedIds.map((id) => {
-                  const u = mockUsers.find((u) => u.id === id);
+                  const u = (profiles ?? []).find((u) => u.id === id);
                   if (!u) return null;
                   return (
                     <Badge
@@ -348,8 +360,14 @@ export default function BoardCreatePage() {
         </CardContent>
       </Card>
 
-      <Button className="w-full rounded-xl py-5 text-base" onClick={() => navigate("/board")}>
-        {invitedIds.length > 0
+      <Button
+        className="w-full rounded-xl py-5 text-base"
+        onClick={handleSubmit}
+        disabled={createPosting.isPending || !title.trim() || !area.trim()}
+      >
+        {createPosting.isPending
+          ? "投稿中..."
+          : invitedIds.length > 0
           ? `${invitedIds.length}人を誘って募集を投稿する`
           : "募集を投稿する"}
       </Button>

@@ -6,12 +6,25 @@ import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, HandHeart, Clock, Wifi } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { mockPostings, mockUsers, getCategoryEmoji, getCategoryLabel } from "@/lib/mockData";
+import { useAuth } from "@/hooks/useAuth";
+import { usePosting, useParticipate, useRemoveParticipation } from "@/hooks/usePostings";
+import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
 
 export default function BoardDetailPage() {
   const { id } = useParams();
-  const post = mockPostings.find((p) => p.id === id);
+  const { user } = useAuth();
+  const { data: post, isLoading } = usePosting(id);
+  const participateMutation = useParticipate();
+  const removeMutation = useRemoveParticipation();
   const [myAction, setMyAction] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
 
   if (!post) {
     return (
@@ -22,13 +35,22 @@ export default function BoardDetailPage() {
     );
   }
 
-  const creator = mockUsers.find((u) => u.id === post.creatorId);
-
   const actions = [
-    { key: "join", label: "行きたい！", icon: HandHeart, color: "bg-primary text-primary-foreground" },
-    { key: "interested", label: "興味あり（日程合えば）", icon: Clock, color: "bg-accent text-accent-foreground" },
-    { key: "online", label: "オンラインなら", icon: Wifi, color: "bg-secondary text-secondary-foreground" },
+    { key: "join" as const, label: "行きたい！", icon: HandHeart, color: "bg-primary text-primary-foreground" },
+    { key: "interested" as const, label: "興味あり（日程合えば）", icon: Clock, color: "bg-accent text-accent-foreground" },
+    { key: "online" as const, label: "オンラインなら", icon: Wifi, color: "bg-secondary text-secondary-foreground" },
   ];
+
+  const handleAction = (key: "join" | "interested" | "online") => {
+    if (!user) return;
+    if (myAction === key) {
+      removeMutation.mutate({ postingId: post.id, userId: user.id });
+      setMyAction(null);
+    } else {
+      participateMutation.mutate({ postingId: post.id, userId: user.id, action: key });
+      setMyAction(key);
+    }
+  };
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
@@ -38,13 +60,12 @@ export default function BoardDetailPage() {
         <div className="flex items-center gap-2">
           <span className="text-2xl">{getCategoryEmoji(post.category)}</span>
           <Badge variant="secondary" className="rounded-full">{getCategoryLabel(post.category)}</Badge>
-          {post.isOnline && <Badge variant="outline" className="rounded-full">オンライン</Badge>}
+          {post.is_online && <Badge variant="outline" className="rounded-full">オンライン</Badge>}
         </div>
-        
       </div>
 
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        {post.dateUndecided ? (
+        {post.date_undecided ? (
           <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> 日程未定</span>
         ) : (
           <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {post.date}</span>
@@ -52,11 +73,11 @@ export default function BoardDetailPage() {
         <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {post.area}</span>
       </div>
 
-      {creator && (
+      {post.creator && (
         <div className="flex items-center gap-3">
-          <UserAvatar name={creator.name} className="h-9 w-9 text-sm" />
+          <UserAvatar name={post.creator.name} className="h-9 w-9 text-sm" />
           <div>
-            <p className="text-sm font-medium">{creator.name}</p>
+            <p className="text-sm font-medium">{post.creator.name}</p>
             <p className="text-xs text-muted-foreground">企画者</p>
           </div>
         </div>
@@ -79,7 +100,8 @@ export default function BoardDetailPage() {
               className={`rounded-xl py-5 justify-start gap-3 text-sm ${
                 myAction === key ? color : ""
               }`}
-              onClick={() => setMyAction(myAction === key ? null : key)}
+              onClick={() => handleAction(key)}
+              disabled={participateMutation.isPending || removeMutation.isPending}
             >
               <Icon className="h-5 w-5" />
               {label}
@@ -93,12 +115,11 @@ export default function BoardDetailPage() {
         <p className="text-sm font-semibold">反応した人（{post.participants.length}人）</p>
         <div className="flex flex-wrap gap-3">
           {post.participants.map((p) => {
-            const u = mockUsers.find((mu) => mu.id === p.userId);
-            if (!u) return null;
+            if (!p.profile) return null;
             return (
-              <Link key={u.id} to={`/members/${u.id}`} className="flex flex-col items-center gap-1">
-                <UserAvatar name={u.name} className="h-11 w-11 text-sm" />
-                <span className="text-xs text-muted-foreground">{u.name.split(" ")[1]}</span>
+              <Link key={p.id} to={`/members/${p.user_id}`} className="flex flex-col items-center gap-1">
+                <UserAvatar name={p.profile.name} className="h-11 w-11 text-sm" />
+                <span className="text-xs text-muted-foreground">{p.profile.name.split(" ")[1] ?? p.profile.name}</span>
               </Link>
             );
           })}

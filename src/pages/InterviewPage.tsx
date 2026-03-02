@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Sparkles, Send, Check } from "lucide-react";
+import { Send, Check } from "lucide-react";
 import AppHeader from "@/components/AppHeader";
-import { mockQuestions } from "@/lib/mockData";
+import { useAuth } from "@/hooks/useAuth";
+import { useAIQuestions, useAnswerQuestion } from "@/hooks/useAIQuestions";
 
 interface Message {
   id: string;
@@ -13,30 +13,44 @@ interface Message {
   content: string;
   options?: string[];
   multiSelect?: boolean;
+  questionId?: string;
 }
 
 export default function InterviewPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "m1",
-      type: "question",
-      content: mockQuestions[0].question,
-      options: mockQuestions[0].options,
-      multiSelect: true,
-    },
-  ]);
+  const { user } = useAuth();
+  const { data: questions, isLoading } = useAIQuestions();
+  const answerMutation = useAnswerQuestion();
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [freeText, setFreeText] = useState("");
   const [questionIdx, setQuestionIdx] = useState(0);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
 
+  // 質問がロードされたら最初の質問を表示
+  useEffect(() => {
+    if (questions && questions.length > 0 && messages.length === 0) {
+      setMessages([
+        {
+          id: "m1",
+          type: "question",
+          content: questions[0].question,
+          options: questions[0].options,
+          multiSelect: true,
+          questionId: questions[0].id,
+        },
+      ]);
+    }
+  }, [questions, messages.length]);
+
   const pushNextQuestion = (currentMessages: Message[], nextIdx: number): Message[] => {
-    if (nextIdx < mockQuestions.length) {
+    if (questions && nextIdx < questions.length) {
       currentMessages.push({
         id: `q${nextIdx}`,
         type: "question",
-        content: mockQuestions[nextIdx].question,
-        options: mockQuestions[nextIdx].options,
+        content: questions[nextIdx].question,
+        options: questions[nextIdx].options,
         multiSelect: true,
+        questionId: questions[nextIdx].id,
       });
       setQuestionIdx(nextIdx);
     } else {
@@ -50,6 +64,16 @@ export default function InterviewPage() {
   };
 
   const handleAnswer = (answer: string) => {
+    // Supabaseに回答を保存
+    const currentQuestion = questions?.[questionIdx];
+    if (currentQuestion && user) {
+      answerMutation.mutate({
+        questionId: currentQuestion.id,
+        userId: user.id,
+        answer,
+      });
+    }
+
     const newMessages: Message[] = [
       ...messages,
       { id: `a${questionIdx}`, type: "answer", content: answer },

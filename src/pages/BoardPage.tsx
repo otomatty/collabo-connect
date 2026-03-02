@@ -3,16 +3,16 @@ import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Calendar, MapPin } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { mockPostings, mockUsers, getCategoryEmoji, getCategoryLabel, type Posting } from "@/lib/mockData";
+import { usePostings } from "@/hooks/usePostings";
+import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
 
 export default function BoardPage() {
   const [tab, setTab] = useState("all");
-
-  const filtered = tab === "all" ? mockPostings : mockPostings.filter((p) => p.category === tab);
+  const { data: postings, isLoading } = usePostings(tab);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
@@ -36,10 +36,13 @@ export default function BoardPage() {
         </TabsList>
       </Tabs>
 
-      <div className="space-y-3">
-        {filtered.map((post) => {
-          const creator = mockUsers.find((u) => u.id === post.creatorId);
-          return (
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {(postings ?? []).map((post) => (
             <Link key={post.id} to={`/board/${post.id}`}>
               <Card className="transition-shadow hover:shadow-md">
                 <CardContent className="p-4 space-y-3">
@@ -51,7 +54,7 @@ export default function BoardPage() {
                         <Badge variant="secondary" className="rounded-full text-xs">
                           {getCategoryLabel(post.category)}
                         </Badge>
-                        {post.dateUndecided ? (
+                        {post.date_undecided ? (
                           <span>日程未定</span>
                         ) : (
                           <span className="flex items-center gap-1">
@@ -61,19 +64,18 @@ export default function BoardPage() {
                         <span className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" /> {post.area}
                         </span>
-                        {post.isOnline && <Badge variant="outline" className="rounded-full text-xs">オンライン</Badge>}
+                        {post.is_online && <Badge variant="outline" className="rounded-full text-xs">オンライン</Badge>}
                       </div>
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">{post.description}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex -space-x-2">
-                      {post.participants.map((p) => {
-                        const u = mockUsers.find((mu) => mu.id === p.userId);
-                        return u ? (
-                          <UserAvatar key={u.id} name={u.name} className="h-7 w-7 text-xs border-2 border-card" />
-                        ) : null;
-                      })}
+                      {post.participants.map((p) =>
+                        p.profile ? (
+                          <UserAvatar key={p.id} name={p.profile.name} className="h-7 w-7 text-xs border-2 border-card" />
+                        ) : null
+                      )}
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {post.participants.length}人が反応
@@ -82,9 +84,9 @@ export default function BoardPage() {
                 </CardContent>
               </Card>
             </Link>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

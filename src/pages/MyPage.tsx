@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,26 +9,53 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
-import { currentUser, mockPostings, mockQuestions, popularAreas } from "@/lib/mockData";
+import { useAuth } from "@/hooks/useAuth";
+import { useUpdateProfile } from "@/hooks/useProfiles";
+import { useMyPostings } from "@/hooks/usePostings";
+import { useMyResponses } from "@/hooks/useAIQuestions";
+import { popularAreas } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
 
 export default function MyPage() {
-  const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(currentUser.name);
-  const [role, setRole] = useState(currentUser.role);
-  const [areas, setAreas] = useState(currentUser.areas);
-  const [newArea, setNewArea] = useState("");
-  const [tags, setTags] = useState(currentUser.tags);
-  const [newTag, setNewTag] = useState("");
-  const [aiIntro, setAiIntro] = useState(currentUser.aiIntro);
+  const { user, profile } = useAuth();
+  const updateProfile = useUpdateProfile();
+  const { data: myPostings } = useMyPostings(user?.id);
+  const { data: myResponses } = useMyResponses(user?.id);
 
-  const myPostings = mockPostings.filter(
-    (p) => p.creatorId === currentUser.id || p.participants.some((pt) => pt.userId === currentUser.id)
-  );
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [areas, setAreas] = useState<string[]>([]);
+  const [newArea, setNewArea] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTag, setNewTag] = useState("");
+  const [aiIntro, setAiIntro] = useState("");
+
+  // プロフィールデータをフォームに反映
+  useEffect(() => {
+    if (profile) {
+      setName(profile.name);
+      setRole(profile.role);
+      setAreas(profile.areas);
+      setTags(profile.tags);
+      setAiIntro(profile.ai_intro);
+    }
+  }, [profile]);
 
   const handleSave = () => {
-    setIsEditing(false);
-    toast({ title: "プロフィールを更新しました" });
+    if (!user) return;
+    updateProfile.mutate(
+      {
+        id: user.id,
+        updates: { name, role, areas, tags, ai_intro: aiIntro },
+      },
+      {
+        onSuccess: () => {
+          setIsEditing(false);
+          toast({ title: "プロフィールを更新しました" });
+        },
+      }
+    );
   };
 
   const handleAddTag = () => {
@@ -61,7 +88,7 @@ export default function MyPage() {
         <div className="space-y-0.5">
           <h2 className="text-base font-semibold">{name}</h2>
           <p className="text-sm text-muted-foreground">{role}</p>
-          <p className="text-xs text-muted-foreground">{areas.join("・")} ・ {currentUser.joinedDate} 入社</p>
+          <p className="text-xs text-muted-foreground">{areas.join("・")} ・ {profile?.joined_date} 入社</p>
         </div>
       </div>
 
@@ -92,11 +119,12 @@ export default function MyPage() {
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
           <MessageSquare className="h-3.5 w-3.5 text-primary" /> 回答履歴
         </h3>
-        {mockQuestions.slice(0, 2).map((q) => (
-          <Card key={q.id}>
+        {(myResponses ?? []).slice(0, 2).map((r) => (
+          <Card key={r.id}>
             <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">{q.date}</p>
-              <p className="text-sm">{q.question}</p>
+              <p className="text-xs text-muted-foreground">{r.question?.date}</p>
+              <p className="text-sm">{r.question?.question}</p>
+              <p className="text-xs text-primary mt-1">回答: {r.answer}</p>
             </CardContent>
           </Card>
         ))}
@@ -112,12 +140,12 @@ export default function MyPage() {
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
           <ClipboardList className="h-3.5 w-3.5 text-primary" /> 参加中の募集
         </h3>
-        {myPostings.map((post) => (
+        {(myPostings ?? []).map((post) => (
           <Link key={post.id} to={`/board/${post.id}`}>
             <Card className="transition-shadow hover:shadow-sm">
               <CardContent className="p-3">
                 <p className="text-sm font-medium">{post.title}</p>
-                <p className="text-xs text-muted-foreground">{post.area} ・ {post.dateUndecided ? "日程未定" : post.date}</p>
+                <p className="text-xs text-muted-foreground">{post.area} ・ {post.date_undecided ? "日程未定" : post.date}</p>
               </CardContent>
             </Card>
           </Link>
@@ -242,7 +270,9 @@ export default function MyPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsEditing(false)}>キャンセル</Button>
-            <Button onClick={handleSave}>保存</Button>
+            <Button onClick={handleSave} disabled={updateProfile.isPending}>
+              {updateProfile.isPending ? "保存中..." : "保存"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
