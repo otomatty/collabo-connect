@@ -1,6 +1,6 @@
 <h1 align="center">Collabo-Connect</h1>
 
-**AIインタビュー × グループ募集で社内コミュニケーションを活性化するWebアプリ**
+<p align="center">AIインタビュー × グループ募集で社内コミュニケーションを活性化するWebアプリ</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React" />
