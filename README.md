@@ -1,73 +1,137 @@
-# Welcome to your Lovable project
+# Collabo-Connect
 
-## Project info
+**AIインタビュー × グループ募集で社内コミュニケーションを活性化するWebアプリ**
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+<p align="center">
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-6-646CFF?logo=vite" alt="Vite" />
+  <img src="https://img.shields.io/badge/Supabase-Backend-3FCF8E?logo=supabase" alt="Supabase" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss" alt="Tailwind CSS" />
+</p>
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## 概要
 
-**Use Lovable**
+Collabo-Connect は、社員同士の交流を自然に生み出す**社内コミュニケーションプラットフォーム**です。
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- **AIインタビュー**で社員の人柄・興味を引き出し、プロフィールを自動生成
+- **グループ募集掲示板**で「ごはん・勉強会・イベント」の仲間を簡単に集められる
+- **メンバー検索**でタグや興味から気の合う同僚を発見
 
-Changes made via Lovable will be committed automatically to this repo.
+## 主な機能
 
-**Use your preferred IDE**
+### 🏠 ホーム
+- 「今日の質問」に回答すると、AIがプロフィールを自動更新
+- おすすめ・最新の募集をひと目で確認
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 💬 AIインタビュー
+- チャット形式で複数の質問に回答
+- 回答内容をもとにAI紹介文を生成
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 📋 グループ募集掲示板
+- **3カテゴリ**：🍽️ ごはん・飲み / 📚 勉強会・技術相談 / 🎉 イベント
+- 日程・エリア・オンライン可否を指定して募集を投稿
+- カテゴリ・タグに基づくおすすめメンバーのレコメンド
+- 参加アクション（参加 / 興味あり / オンライン参加）
 
-Follow these steps:
+### 👥 メンバー一覧
+- 名前・タグで検索＆フィルタリング
+- メンバー詳細ページでAI紹介文・タグ・経歴を確認
+
+### 👤 マイページ
+- プロフィール編集（名前・役職・エリア・タグ・紹介文）
+- 自分の投稿一覧・回答履歴の確認
+
+## 技術スタック
+
+| レイヤー | 技術 |
+|---|---|
+| フロントエンド | React 18 + TypeScript + Vite |
+| UIライブラリ | [shadcn/ui](https://ui.shadcn.com/) + Tailwind CSS |
+| バックエンド / DB | [Supabase](https://supabase.com/) (Auth + PostgreSQL + RLS) |
+| 状態管理 / データ取得 | TanStack React Query |
+| ルーティング | React Router v6 |
+| デプロイ | Vercel |
+
+## データベース構成
+
+| テーブル | 説明 |
+|---|---|
+| `profiles` | ユーザープロフィール（名前・役職・エリア・タグ・AI紹介文） |
+| `postings` | 掲示板の募集投稿 |
+| `posting_participants` | 投稿への参加情報（参加 / 興味あり / オンライン） |
+| `ai_questions` | AIインタビュー質問マスタ |
+| `ai_question_responses` | ユーザーの質問に対する回答 |
+
+全テーブルに Row Level Security (RLS) を適用。閲覧は全員可能、編集は本人のみ。
+
+## セットアップ
+
+### 前提条件
+
+- **Node.js** 18 以上
+- **npm** または **bun**
+- **Supabase** プロジェクト（ローカル or クラウド）
+
+### インストール & 起動
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# リポジトリをクローン
 git clone <YOUR_GIT_URL>
+cd collabo-connect
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 依存パッケージのインストール
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# 環境変数の設定（.env ファイルを作成）
+cp .env.example .env
+# VITE_SUPABASE_URL と VITE_SUPABASE_PUBLISHABLE_KEY を設定
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 開発サーバーの起動
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Supabase のセットアップ
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+1. Supabase プロジェクトを作成
+2. `supabase/schema.sql` を SQL Editor で実行（テーブル・RLS・トリガーが作成されます）
+3. 必要に応じて `supabase/seed.sql` でテスト用データを投入
 
-**Use GitHub Codespaces**
+### 利用可能なスクリプト
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| コマンド | 説明 |
+|---|---|
+| `npm run dev` | 開発サーバー起動 |
+| `npm run build` | プロダクションビルド |
+| `npm run preview` | ビルド結果のプレビュー |
+| `npm run lint` | ESLint によるコード検査 |
+| `npm run test` | テストの実行 |
+| `npm run supabase:types` | Supabase の型定義を自動生成 |
 
-## What technologies are used for this project?
+## デプロイ
 
-This project is built with:
+Vercel へのデプロイ手順は [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) を参照してください。
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+環境変数（`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`）の設定が必要です。
 
-## How can I deploy this project?
+## ディレクトリ構成
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```
+src/
+├── components/       # 共通UIコンポーネント
+│   └── ui/           # shadcn/ui コンポーネント
+├── hooks/            # カスタムフック（認証・データ取得）
+├── lib/              # ユーティリティ・定数・Supabase クライアント
+├── pages/            # ページコンポーネント
+├── test/             # テストファイル
+└── types/            # 型定義（Supabase 自動生成）
+supabase/
+├── schema.sql        # データベーススキーマ定義
+└── seed.sql          # テスト用シードデータ
+```
 
-## Can I connect a custom domain to my Lovable project?
+## ライセンス
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Private
