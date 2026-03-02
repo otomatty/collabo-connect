@@ -17,6 +17,8 @@ export default function InitialSetupPage() {
   
   const [name, setName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [joinedDate, setJoinedDate] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
 
   // プロフィールの初期値をセット（メールアドレス等から推定された名前が設定されている場合）
   useEffect(() => {
@@ -25,6 +27,8 @@ export default function InitialSetupPage() {
       const initialName = profile.name.includes("@") ? "" : profile.name;
       setName(initialName);
       setAvatarUrl(profile.avatar_url || "");
+      setJoinedDate(profile.joined_date || "");
+      setTagsInput(profile.tags ? profile.tags.join(", ") : "");
     }
   }, [profile]);
 
@@ -40,12 +44,19 @@ export default function InitialSetupPage() {
       return;
     }
 
+    const tags = tagsInput
+      .split(/[,、]/)
+      .map((tag) => tag.trim())
+      .filter((tag) => tag !== "");
+
     updateProfile.mutate(
       {
         id: user.id,
         updates: { 
           name, 
           avatar_url: previewAvatarUrl,
+          joined_date: joinedDate || null,
+          tags: tags.length > 0 ? tags : null,
         },
       },
       {
@@ -99,6 +110,29 @@ export default function InitialSetupPage() {
               onChange={(e) => setName(e.target.value)}
               required
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="joinedDate">入社年月 (任意)</Label>
+            <Input
+              id="joinedDate"
+              type="month"
+              value={joinedDate}
+              onChange={(e) => setJoinedDate(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tags">興味があること / スキル (任意)</Label>
+            <Input
+              id="tags"
+              placeholder="カンマ区切りで入力 (例: React, 読書, キャンプ)"
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              カンマまたは読点で区切って複数入力できます。
+            </p>
           </div>
 
           <Button 

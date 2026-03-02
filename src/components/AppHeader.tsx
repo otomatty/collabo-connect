@@ -45,7 +45,12 @@ export default function AppHeader({ title, back, action, hideAvatar }: AppHeader
       {!hideAvatar && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shrink-0">
+            <button className="flex items-center gap-2 rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 shrink-0">
+              {profile?.name && (
+                <span className="text-sm font-medium truncate max-w-[100px]">
+                  {profile.name}
+                </span>
+              )}
               <UserAvatar name={profile?.name ?? ""} className="h-8 w-8 text-xs" />
             </button>
           </DropdownMenuTrigger>
