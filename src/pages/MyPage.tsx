@@ -109,8 +109,20 @@ export default function MyPage() {
       {/* AI Intro */}
       <Card>
         <CardContent className="p-4 space-y-1">
-          <p className="text-xs font-semibold text-muted-foreground">紹介文</p>
-          <p className="text-sm text-foreground/80 leading-relaxed">{aiIntro}</p>
+          <p className="text-xs font-semibold text-muted-foreground">自己紹介</p>
+          {aiIntro ? (
+            <p className="text-sm text-foreground/80 leading-relaxed">{aiIntro}</p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">まだ自己紹介文がありません</p>
+              <Link to="/interview">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AIインタビューで作成する
+                </Button>
+              </Link>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -130,7 +142,8 @@ export default function MyPage() {
         ))}
         <Link to="/interview">
           <Button variant="outline" className="w-full" size="sm">
-            インタビューに答える →
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            AIインタビューで自己紹介を作成・更新する
           </Button>
         </Link>
       </div>
@@ -263,7 +276,7 @@ export default function MyPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">紹介文</label>
+              <label className="text-sm font-medium">自己紹介</label>
               <Textarea value={aiIntro} onChange={(e) => setAiIntro(e.target.value)} rows={4} />
             </div>
           </div>

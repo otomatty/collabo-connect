@@ -58,7 +58,7 @@ export default function MemberDetailPage() {
       <Card className="border-primary/20 bg-warm-light/30">
         <CardContent className="p-4 space-y-2">
           <p className="text-sm font-semibold flex items-center gap-2">
-            ✨ AIからの紹介
+            ✨ 自己紹介
           </p>
           <p className="text-sm leading-relaxed text-foreground/80">{user.ai_intro}</p>
         </CardContent>
