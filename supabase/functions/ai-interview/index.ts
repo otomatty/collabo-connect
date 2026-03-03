@@ -133,10 +133,88 @@ function generateSystemPrompt(profile: RequestBody["profile"]): string {
 
 // ---------- JSON パース ----------
 function parseJsonFromResponse(text: string): Record<string, unknown> {
-  // コードブロック内のJSONを抽出
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonStr = codeBlockMatch ? codeBlockMatch[1].trim() : text.trim();
-  return JSON.parse(jsonStr);
+  const cleaned = text.trim();
+
+  // 1) そのままJSONとして解釈
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // noop
+  }
+
+  // 2) ```json ... ``` / ```JSON ... ``` のコードフェンスを抽出
+  const codeBlockMatches = cleaned.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi);
+  for (const match of codeBlockMatches) {
+    const candidate = match[1]?.trim();
+    if (!candidate) continue;
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // noop
+    }
+  }
+
+  // 3) 文字列内の最初の { と最後の } をJSONとして抽出
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // noop
+    }
+  }
+
+  throw new Error("Failed to parse JSON from Gemini response");
+}
+
+function parseIntroduction(raw: string): string {
+  try {
+    const parsed = parseJsonFromResponse(raw) as {
+      introduction?: unknown;
+      intro?: unknown;
+      selfIntroduction?: unknown;
+    };
+
+    const candidates = [parsed.introduction, parsed.intro, parsed.selfIntroduction];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate.trim();
+      }
+    }
+  } catch {
+    // JSONでないプレーンテキスト回答は次の処理で吸収
+  }
+
+  const plainText = raw
+    .replace(/```(?:json)?/gi, "")
+    .replace(/```/g, "")
+    .trim();
+
+  if (plainText.startsWith("{") && plainText.endsWith("}")) {
+    try {
+      const nested = JSON.parse(plainText) as {
+        introduction?: unknown;
+        intro?: unknown;
+        selfIntroduction?: unknown;
+      };
+      const nestedCandidates = [nested.introduction, nested.intro, nested.selfIntroduction];
+      for (const candidate of nestedCandidates) {
+        if (typeof candidate === "string" && candidate.trim()) {
+          return candidate.trim();
+        }
+      }
+    } catch {
+      // noop
+    }
+  }
+
+  if (plainText) {
+    return plainText;
+  }
+
+  throw new Error("Gemini response does not include introduction text");
 }
 
 // ---------- ハンドラー ----------
@@ -231,13 +309,11 @@ Deno.serve(async (req: Request) => {
 
       const userPrompt = `## インタビュー内容\n${conversationHistory}\n\n上記のインタビュー結果をもとに、自己紹介文を作成してください。`;
       const raw = await callGemini(systemPrompt, userPrompt);
-      const parsed = parseJsonFromResponse(raw) as {
-        introduction: string;
-      };
+      const introduction = parseIntroduction(raw);
 
       return new Response(
         JSON.stringify({
-          introduction: parsed.introduction,
+          introduction,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
