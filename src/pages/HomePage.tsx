@@ -111,7 +111,7 @@ export default function HomePage() {
                   <p className="font-medium text-sm">{recommended.title}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Badge variant="secondary" className="rounded-full text-xs font-normal">
-                      {getCategoryEmoji(recommended.category)} {getCategoryLabel(recommended.category)}
+                      {getCategoryEmoji(recommended.category as "food" | "study" | "event")} {getCategoryLabel(recommended.category as "food" | "study" | "event")}
                     </Badge>
                     {recommended.is_online && <Badge variant="outline" className="rounded-full text-xs font-normal">オンライン</Badge>}
                   </div>
@@ -124,7 +124,7 @@ export default function HomePage() {
       )}
 
       {/* Recent Postings */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold">最近の募集</h2>
           <Link to="/board" className="text-xs text-primary font-medium">
@@ -135,7 +135,7 @@ export default function HomePage() {
           <Link key={post.id} to={`/board/${post.id}`}>
             <Card className="transition-shadow hover:shadow-sm">
               <CardContent className="flex items-center gap-3 p-3">
-                <div className="text-xl">{getCategoryEmoji(post.category)}</div>
+                <div className="text-xl">{getCategoryEmoji(post.category as "food" | "study" | "event")}</div>
                 <div className="flex-1 min-w-0 space-y-0.5">
                   <p className="font-medium text-sm truncate">{post.title}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">

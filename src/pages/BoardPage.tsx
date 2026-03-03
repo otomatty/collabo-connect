@@ -41,18 +41,18 @@ export default function BoardPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {(postings ?? []).map((post) => (
             <Link key={post.id} to={`/board/${post.id}`}>
               <Card className="transition-shadow hover:shadow-md">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="text-2xl mt-0.5">{getCategoryEmoji(post.category)}</div>
+                    <div className="text-2xl mt-0.5">{getCategoryEmoji(post.category as "food" | "study" | "event")}</div>
                     <div className="flex-1 min-w-0 space-y-1">
                       <p className="font-semibold text-sm">{post.title}</p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant="secondary" className="rounded-full text-xs">
-                          {getCategoryLabel(post.category)}
+                          {getCategoryLabel(post.category as "food" | "study" | "event")}
                         </Badge>
                         {post.date_undecided ? (
                           <span>日程未定</span>

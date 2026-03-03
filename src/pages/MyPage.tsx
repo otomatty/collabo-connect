@@ -115,7 +115,7 @@ export default function MyPage() {
       </Card>
 
       {/* Interview history */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
           <MessageSquare className="h-3.5 w-3.5 text-primary" /> 回答履歴
         </h3>
@@ -136,7 +136,7 @@ export default function MyPage() {
       </div>
 
       {/* My postings */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
           <ClipboardList className="h-3.5 w-3.5 text-primary" /> 参加中の募集
         </h3>

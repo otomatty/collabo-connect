@@ -53,7 +53,7 @@ export default function MembersPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           {filtered.map((user) => (
             <Link key={user.id} to={`/members/${user.id}`}>
               <Card className="transition-shadow hover:shadow-md">
