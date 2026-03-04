@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +21,7 @@ import { toast } from "@/hooks/use-toast";
 
 export default function MyPage() {
   const { user, profile } = useAuth();
+  const { shouldShow: showGuide, dismiss } = useGuide("mypage");
   const updateProfile = useUpdateProfile();
   const { data: myPostings } = useMyPostings(user?.id);
   const { data: myResponses } = useMyResponses(user?.id);
@@ -72,6 +76,7 @@ export default function MyPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
+      <GuideModal open={showGuide} guide={guideConfigs.mypage} onDismiss={dismiss} />
       <AppHeader
         title="マイページ"
         hideAvatar

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -14,6 +17,7 @@ import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
 
 export default function HomePage() {
   const { user, profile } = useAuth();
+  const { shouldShow: showGuide, dismiss } = useGuide("home");
   const { data: todayQuestion } = useTodayQuestion();
   const { data: postings } = usePostings();
   const answerMutation = useAnswerQuestion();
@@ -40,6 +44,11 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
+      <GuideModal
+        open={showGuide}
+        guide={guideConfigs.home}
+        onDismiss={dismiss}
+      />
       <AppHeader title={`${displayName}さん`} />
       <p className="text-sm text-muted-foreground -mt-4">おはようございます 👋</p>
 

@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, HandHeart, Clock, Wifi } from "lucide-react";
@@ -13,6 +16,7 @@ import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
 export default function BoardDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { shouldShow: showGuide, dismiss } = useGuide("board-detail");
   const { data: post, isLoading } = usePosting(id);
   const participateMutation = useParticipate();
   const removeMutation = useRemoveParticipation();
@@ -54,6 +58,7 @@ export default function BoardDetailPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
+      <GuideModal open={showGuide} guide={guideConfigs["board-detail"]} onDismiss={dismiss} />
       <AppHeader title={post.title} back="/board" />
 
       <div className="space-y-2">

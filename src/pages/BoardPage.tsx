@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,10 +15,12 @@ import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
 
 export default function BoardPage() {
   const [tab, setTab] = useState("all");
+  const { shouldShow: showGuide, dismiss } = useGuide("board");
   const { data: postings, isLoading } = usePostings(tab);
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
+      <GuideModal open={showGuide} guide={guideConfigs.board} onDismiss={dismiss} />
       <AppHeader
         title="グループ募集"
         action={

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +26,7 @@ import { toast } from "@/hooks/use-toast";
 export default function InterviewPage() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { shouldShow: showGuide, dismiss } = useGuide("interview");
   const updateProfile = useUpdateProfile();
   const {
     messages,
@@ -120,6 +124,7 @@ export default function InterviewPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 flex flex-col min-h-[calc(100dvh-4rem)]">
+      <GuideModal open={showGuide} guide={guideConfigs.interview} onDismiss={dismiss} />
       <AppHeader title="AIインタビュー" back />
 
       {/* 開始前の画面 */}

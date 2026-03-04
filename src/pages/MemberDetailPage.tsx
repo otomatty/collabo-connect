@@ -1,5 +1,8 @@
 import { useParams, Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, MapPin, CalendarDays } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
@@ -8,6 +11,7 @@ import { useProfile } from "@/hooks/useProfiles";
 
 export default function MemberDetailPage() {
   const { id } = useParams();
+  const { shouldShow: showGuide, dismiss } = useGuide("member-detail");
   const { data: user, isLoading } = useProfile(id);
 
   if (isLoading) {
@@ -29,6 +33,7 @@ export default function MemberDetailPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5">
+      <GuideModal open={showGuide} guide={guideConfigs["member-detail"]} onDismiss={dismiss} />
       <AppHeader title={user.name} back="/members" />
 
       <div className="flex flex-col items-center gap-3 text-center">
