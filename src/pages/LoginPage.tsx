@@ -4,16 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
+import { Mail, CheckCircle2 } from "lucide-react";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { user, loading, signInWithEmail, signUpWithEmail } = useAuth();
-  
-  const [isSignUp, setIsSignUp] = useState(false);
+  const { user, loading, signInWithEmail } = useAuth();
+
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   // 既にログイン済みならホームへ
   useEffect(() => {
@@ -28,12 +28,9 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      if (isSignUp) {
-        await signUpWithEmail(email, password);
-        navigate("/signup-success");
-      } else {
-        await signInWithEmail(email, password);
-      }
+      // パスワードなしで呼び出すことでMagic Link (OTP) を送信
+      await signInWithEmail(email);
+      setMagicLinkSent(true);
     } catch (error) {
       if (error instanceof Error) {
         setErrorMsg(error.message);
@@ -59,54 +56,70 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Auth Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">メールアドレス</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="name@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+        {magicLinkSent ? (
+          /* Magic Link 送信完了画面 */
+          <div className="space-y-4 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-600">
+              <CheckCircle2 className="h-7 w-7" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-foreground">メールを送信しました</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                <span className="font-medium text-foreground">{email}</span> 宛に
+                ログインリンクを送信しました。<br />
+                メール内のリンクをクリックしてログインしてください。
+              </p>
+            </div>
+            <div className="pt-2 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                メールが届かない場合は、迷惑メールフォルダをご確認ください。
+              </p>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setMagicLinkSent(false);
+                  setEmail("");
+                }}
+              >
+                別のメールアドレスで試す
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="パスワードを入力"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+        ) : (
+          /* メールアドレス入力フォーム */
+          <>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">メールアドレス</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
 
-          {errorMsg && <p className="text-sm text-destructive">{errorMsg}</p>}
+              {errorMsg && <p className="text-sm text-destructive">{errorMsg}</p>}
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={authLoading}
-          >
-            {authLoading ? "処理中..." : isSignUp ? "アカウント作成" : "ログイン"}
-          </Button>
-        </form>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={authLoading}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                {authLoading ? "送信中..." : "ログインリンクを送信"}
+              </Button>
+            </form>
 
-        <div className="text-center text-sm">
-          <button
-            type="button"
-            className="text-primary hover:underline font-medium"
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setErrorMsg("");
-            }}
-          >
-            {isSignUp ? "すでにアカウントをお持ちの方はこちらからログイン" : "アカウントを作成する"}
-          </button>
-        </div>
+            <p className="text-center text-xs text-muted-foreground leading-relaxed">
+              メールアドレスを入力すると、ログイン用のリンクが届きます。<br />
+              パスワードは不要です。
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
