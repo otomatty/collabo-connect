@@ -205,14 +205,25 @@ personCard は前回答・プロフィールから初期構築してください
 
     // ---------- action: reply ----------
     if (action === "reply") {
+      if (typeof userReply !== "string" || !userReply.trim()) {
+        return new Response(
+          JSON.stringify({ error: "userReply is required for reply action" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const questionCount = messages.filter((m) => m.role === "ai").length;
       const systemPrompt = buildInterviewSystemPrompt(profile, pastResponses, personCard);
 
       // Only send the most recent exchange + personCard (no full history needed)
       const lastAiMsg = [...messages].reverse().find((m) => m.role === "ai");
+      const normalizedReply = userReply.trim();
       const recentContext = lastAiMsg
-        ? `インタビュアー: ${lastAiMsg.content}\nユーザー: ${userReply}`
-        : `ユーザー: ${userReply}`;
+        ? `インタビュアー: ${lastAiMsg.content}\nユーザー: ${normalizedReply}`
+        : `ユーザー: ${normalizedReply}`;
 
       let instruction: string;
       if (questionCount >= 5) {
@@ -235,7 +246,7 @@ personCard には今回の回答で得られた新情報を追記してくださ
       return new Response(
         JSON.stringify({
           message: parsed.message,
-          options: parsed.options ?? [],
+          options: questionCount >= 5 ? [] : (parsed.options ?? []),
           personCard: parsed.personCard ?? personCard ?? "",
           done: questionCount >= 5,
         }),
