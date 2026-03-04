@@ -39,9 +39,19 @@ export function useAIInterview() {
   /** Edge Function を呼び出すヘルパー */
   const invokeFunction = useCallback(
     async <T>(payload: Record<string, unknown>): Promise<T> => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       const { data, error } = await supabase.functions.invoke("ai-interview", {
         body: payload,
+        headers: session?.access_token
+          ? {
+              Authorization: `Bearer ${session.access_token}`,
+            }
+          : undefined,
       });
+
       if (error) throw new Error(error.message ?? "Edge Function エラー");
       return data as T;
     },
