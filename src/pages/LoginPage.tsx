@@ -50,9 +50,9 @@ export default function LoginPage() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-primary text-2xl text-primary-foreground shadow-sm">
             🤝
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Collabo-Link</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Collabo Connect</h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            共通点とリスペクトで<br />自然に集まれる社内ハブ
+            AIインタビュー × グループ募集で<br />社内コミュニケーションを活性化
           </p>
         </div>
 
@@ -67,7 +67,7 @@ export default function LoginPage() {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 <span className="font-medium text-foreground">{email}</span> 宛に
                 ログインリンクを送信しました。<br />
-                メール内のリンクをクリックしてログインしてください。
+                メールのリンクをクリックしてログインしてください。
               </p>
             </div>
             <div className="pt-2 space-y-3">

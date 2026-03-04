@@ -78,7 +78,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
 
 // ---------- システムプロンプト ----------
 function interviewSystemPrompt(profile: RequestBody["profile"]): string {
-  return `あなたは「Collabo-Connect」という社内コミュニケーションアプリのインタビュワーAIです。
+  return `あなたは「Collabo Connect」という社内コミュニケーションアプリのインタビュワーAIです。
 ユーザーのことを親しみやすくインタビューし、その人らしさが伝わる自己紹介文を作成するための情報を引き出してください。
 
 ## あなたの役割
@@ -106,7 +106,7 @@ function interviewSystemPrompt(profile: RequestBody["profile"]): string {
 }
 
 function generateSystemPrompt(profile: RequestBody["profile"]): string {
-  return `あなたは「Collabo-Connect」という社内コミュニケーションアプリの自己紹介文ライターです。
+  return `あなたは「Collabo Connect」という社内コミュニケーションアプリの自己紹介文ライターです。
 以下のインタビュー内容をもとに、プロフィールに掲載する自己紹介文を作成してください。
 
 ## 要件

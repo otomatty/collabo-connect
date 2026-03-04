@@ -1,5 +1,5 @@
 -- ============================================
--- Collabo-Connect Database Schema
+-- Collabo Connect Database Schema
 -- ============================================
 
 -- Enable UUID generation

@@ -77,7 +77,7 @@ export default function InitialSetupPage() {
         <CardHeader className="text-center space-y-2">
           <CardTitle className="text-2xl font-bold">プロフィール設定</CardTitle>
           <CardDescription>
-            Collabo-Connectへようこそ！
+            Collabo Connectへようこそ！
             <br />
             まずは表示名とアイコンを設定しましょう。
           </CardDescription>

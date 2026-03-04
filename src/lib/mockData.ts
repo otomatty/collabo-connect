@@ -1,4 +1,4 @@
-// Mock data for Collabo-Link
+// Mock data for Collabo Connect
 
 export interface User {
   id: string;
