@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
@@ -10,6 +13,7 @@ import { useProfiles } from "@/hooks/useProfiles";
 
 export default function MembersPage() {
   const { data: profiles, isLoading } = useProfiles();
+  const { shouldShow: showGuide, dismiss } = useGuide("members");
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
@@ -23,6 +27,7 @@ export default function MembersPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
+      <GuideModal open={showGuide} guide={guideConfigs.members} onDismiss={dismiss} />
       <AppHeader title="メンバー" />
 
       <div className="relative">

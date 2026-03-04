@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +17,7 @@ import { JOB_TYPES } from "@/lib/constants";
 export default function InitialSetupPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { shouldShow: showGuide, dismiss } = useGuide("setup");
   const { data: profile } = useProfile(user?.id);
   const updateProfile = useUpdateProfile();
   
@@ -78,6 +82,7 @@ export default function InitialSetupPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10">
+      <GuideModal open={showGuide} guide={guideConfigs.setup} onDismiss={dismiss} />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <CardTitle className="text-2xl font-bold">プロフィール設定</CardTitle>

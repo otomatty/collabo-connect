@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { GuideModal } from "@/components/GuideModal";
+import { useGuide } from "@/hooks/useGuide";
+import { guideConfigs } from "@/lib/guideConfig";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +65,7 @@ function getRecommendedMembers(category: string, profiles: Profile[], currentUse
 export default function BoardCreatePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { shouldShow: showGuide, dismiss } = useGuide("board-create");
   const { data: profiles } = useProfiles();
   const createPosting = useCreatePosting();
 
@@ -108,6 +112,7 @@ export default function BoardCreatePage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-5 pb-28">
+      <GuideModal open={showGuide} guide={guideConfigs["board-create"]} onDismiss={dismiss} />
       <AppHeader title="募集を作成" back="/board" />
 
       {/* Suggested Themes */}
