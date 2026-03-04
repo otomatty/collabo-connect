@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import type { GuideKey } from "@/lib/guideConfig";
 
 const STORAGE_PREFIX = "collabo-connect-guide";
 const GLOBAL_KEY = `${STORAGE_PREFIX}-global`;
@@ -12,7 +13,8 @@ function hasSeenGuide(key: string): boolean {
     const value = localStorage.getItem(`${STORAGE_PREFIX}-${key}`);
     return value === "true";
   } catch {
-    return false;
+    // localStorage が使用できない環境では、ガイドが何度も表示されないよう「表示済み」と扱う
+    return true;
   }
 }
 
@@ -41,7 +43,7 @@ function setGlobalDismiss(): void {
  * @param guideKey 画面識別用のキー
  * @returns ガイドを表示するか、閉じる処理、今後表示しない設定
  */
-export function useGuide(guideKey: string) {
+export function useGuide(guideKey: GuideKey) {
   const [shouldShow, setShouldShow] = useState(false);
 
   useEffect(() => {

@@ -58,13 +58,13 @@ export function GuideModal({ open, guide, onDismiss }: GuideModalProps) {
             <DialogTitle className="text-lg">{guide.title}</DialogTitle>
           </div>
         </DialogHeader>
-        <div
+        <DialogDescription
           className={cn(
             "rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground leading-relaxed"
           )}
         >
           {formatDescription(guide.description)}
-        </div>
+        </DialogDescription>
         <div className="flex items-center space-x-2 py-2">
           <Checkbox
             id="hide-all-guides"
