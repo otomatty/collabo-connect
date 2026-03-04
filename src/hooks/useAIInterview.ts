@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
-// ---------- 型定義 ----------
+// ---------- Type Definitions ----------
 export interface ChatMessage {
   role: "ai" | "user";
   content: string;
@@ -11,6 +11,7 @@ export interface ChatMessage {
 interface AIReplyResponse {
   message: string;
   options: string[];
+  personCard: string;
   done: boolean;
 }
 
@@ -18,12 +19,18 @@ interface AIGenerateResponse {
   introduction: string;
 }
 
-interface ProfileForInterview {
+export interface ProfileForInterview {
   name: string;
   role: string;
+  job_type: string;
   areas: string[];
   tags: string[];
   ai_intro: string;
+}
+
+export interface PastResponse {
+  question: string;
+  answer: string;
 }
 
 type InterviewPhase = "idle" | "interviewing" | "generating" | "done" | "error";
@@ -36,33 +43,39 @@ export function useAIInterview() {
   const [error, setError] = useState<string | null>(null);
   const [interviewDone, setInterviewDone] = useState(false);
 
-  /** Edge Function を呼び出すヘルパー */
+  // personCard is accumulated summary managed by the AI
+  const personCardRef = useRef<string>("");
+
+  /** Edge Function helper */
   const invokeFunction = useCallback(
     async <T>(payload: Record<string, unknown>): Promise<T> => {
       const { data, error } = await supabase.functions.invoke("ai-interview", {
         body: payload,
       });
-      if (error) throw new Error(error.message ?? "Edge Function エラー");
+      if (error) throw new Error(error.message ?? "Edge Function error");
       return data as T;
     },
     []
   );
 
-  /** インタビューを開始 */
+  /** Start interview */
   const startInterview = useCallback(
-    async (profile: ProfileForInterview) => {
+    async (profile: ProfileForInterview, pastResponses?: PastResponse[]) => {
       setIsLoading(true);
       setError(null);
       setPhase("interviewing");
       setMessages([]);
       setGeneratedIntro("");
       setInterviewDone(false);
+      personCardRef.current = "";
       try {
         const res = await invokeFunction<AIReplyResponse>({
           action: "start",
           profile,
           messages: [],
+          pastResponses: pastResponses ?? [],
         });
+        personCardRef.current = res.personCard ?? "";
         const aiMsg: ChatMessage = {
           role: "ai",
           content: res.message,
@@ -79,9 +92,9 @@ export function useAIInterview() {
     [invokeFunction]
   );
 
-  /** ユーザーの回答を送信し、次の質問を取得 */
+  /** Send reply and get next question */
   const sendReply = useCallback(
-    async (reply: string, profile: ProfileForInterview) => {
+    async (reply: string, profile: ProfileForInterview, pastResponses?: PastResponse[]) => {
       setIsLoading(true);
       setError(null);
       try {
@@ -94,7 +107,11 @@ export function useAIInterview() {
           profile,
           messages: updatedMessages,
           userReply: reply,
+          pastResponses: pastResponses ?? [],
+          personCard: personCardRef.current,
         });
+
+        personCardRef.current = res.personCard ?? personCardRef.current;
 
         const aiMsg: ChatMessage = {
           role: "ai",
@@ -116,9 +133,9 @@ export function useAIInterview() {
     [messages, invokeFunction]
   );
 
-  /** インタビュー結果から自己紹介文を生成 */
+  /** Generate self-introduction from interview */
   const generateIntro = useCallback(
-    async (profile: ProfileForInterview) => {
+    async (profile: ProfileForInterview, pastResponses?: PastResponse[]) => {
       setIsLoading(true);
       setError(null);
       setPhase("generating");
@@ -127,6 +144,8 @@ export function useAIInterview() {
           action: "generate",
           profile,
           messages,
+          pastResponses: pastResponses ?? [],
+          personCard: personCardRef.current,
         });
         setGeneratedIntro(res.introduction);
         setPhase("done");
@@ -140,7 +159,7 @@ export function useAIInterview() {
     [messages, invokeFunction]
   );
 
-  /** リセット */
+  /** Reset */
   const reset = useCallback(() => {
     setMessages([]);
     setPhase("idle");
@@ -148,6 +167,7 @@ export function useAIInterview() {
     setIsLoading(false);
     setError(null);
     setInterviewDone(false);
+    personCardRef.current = "";
   }, []);
 
   return {

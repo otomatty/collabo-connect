@@ -21,6 +21,8 @@ import UserAvatar from "@/components/UserAvatar";
 import { useAuth } from "@/hooks/useAuth";
 import { useUpdateProfile } from "@/hooks/useProfiles";
 import { useAIInterview } from "@/hooks/useAIInterview";
+import type { PastResponse } from "@/hooks/useAIInterview";
+import { useMyResponses } from "@/hooks/useAIQuestions";
 import { toast } from "@/hooks/use-toast";
 
 export default function InterviewPage() {
@@ -28,6 +30,13 @@ export default function InterviewPage() {
   const { user, profile } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("interview");
   const updateProfile = useUpdateProfile();
+  const { data: myResponses } = useMyResponses(user?.id);
+
+  // 事前回答を PastResponse[] 形式に変換
+  const pastResponses: PastResponse[] = (myResponses ?? []).map((r) => ({
+    question: typeof r.question === "object" && r.question !== null ? (r.question as { question?: string }).question ?? "" : "",
+    answer: r.answer,
+  }));
   const {
     messages,
     phase,
@@ -52,11 +61,12 @@ export default function InterviewPage() {
     ? {
         name: profile.name,
         role: profile.role,
+        job_type: profile.job_type ?? "",
         areas: profile.areas,
         tags: profile.tags,
         ai_intro: profile.ai_intro,
       }
-    : { name: "", role: "", areas: [], tags: [], ai_intro: "" };
+    : { name: "", role: "", job_type: "", areas: [], tags: [], ai_intro: "" };
 
   // 生成結果が出たら編集フィールドに反映
   useEffect(() => {
@@ -81,7 +91,7 @@ export default function InterviewPage() {
   const submitSelected = () => {
     if (selectedOptions.length === 0) return;
     const answer = selectedOptions.join("、");
-    sendReply(answer, profileForAI);
+    sendReply(answer, profileForAI, pastResponses);
     setSelectedOptions([]);
     setFreeText("");
   };
@@ -95,7 +105,7 @@ export default function InterviewPage() {
       selectedOptions.length > 0
         ? `${selectedOptions.join("、")}（${text}）`
         : text;
-    sendReply(answer, profileForAI);
+    sendReply(answer, profileForAI, pastResponses);
     setSelectedOptions([]);
     setFreeText("");
   };
@@ -148,7 +158,7 @@ export default function InterviewPage() {
           <Button
             size="lg"
             className="rounded-full px-8 gap-2"
-            onClick={() => startInterview(profileForAI)}
+            onClick={() => startInterview(profileForAI, pastResponses)}
             disabled={isLoading}
           >
             {isLoading ? (
@@ -269,7 +279,7 @@ export default function InterviewPage() {
               <Button
                 size="lg"
                 className="rounded-full w-full gap-2"
-                onClick={() => generateIntro(profileForAI)}
+                onClick={() => generateIntro(profileForAI, pastResponses)}
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -373,7 +383,7 @@ export default function InterviewPage() {
               <Button
                 variant="outline"
                 className="flex-1 rounded-full gap-2"
-                onClick={() => generateIntro(profileForAI)}
+                onClick={() => generateIntro(profileForAI, pastResponses)}
                 disabled={isLoading}
               >
                 <RefreshCw className="h-4 w-4" />
