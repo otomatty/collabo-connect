@@ -20,20 +20,53 @@ export function useAIQuestions() {
   });
 }
 
-/** 今日の質問を取得 */
+/** 今日の日付を YYYY-MM-DD 形式で返す（ローカルタイムゾーン） */
+function getTodayDateString(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** 今日の質問を取得（date が今日の質問のみ） */
 export function useTodayQuestion() {
+  const today = getTodayDateString();
   return useQuery<AIQuestion | null>({
-    queryKey: ["ai_questions", "today"],
+    queryKey: ["ai_questions", "today", today],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ai_questions")
         .select("*")
-        .order("date", { ascending: false })
+        .eq("date", today)
         .limit(1)
         .single();
       if (error && error.code !== "PGRST116") throw error;
       return data;
     },
+  });
+}
+
+/** 今日の質問に回答済みかどうかを判定 */
+export function useHasAnsweredToday(
+  userId: string | undefined,
+  questionId: string | undefined
+) {
+  return useQuery<boolean>({
+    queryKey: ["ai_responses", "today", userId, questionId],
+    queryFn: async () => {
+      if (!userId || !questionId) return false;
+      const { data, error } = await supabase
+        .from("ai_question_responses")
+        .select("id")
+        .eq("question_id", questionId)
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return !!data;
+    },
+    enabled: !!userId && !!questionId,
   });
 }
 
