@@ -173,6 +173,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string | null
           id: string
+          job_type: string
           joined_date: string | null
           name: string
           role: string | null
@@ -185,6 +186,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           id: string
+          job_type?: string
           joined_date?: string | null
           name: string
           role?: string | null
@@ -197,6 +199,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string | null
           id?: string
+          job_type?: string
           joined_date?: string | null
           name?: string
           role?: string | null

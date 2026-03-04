@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfiles";
 import { toast } from "@/hooks/use-toast";
 import UserAvatar from "@/components/UserAvatar";
+import { JOB_TYPES } from "@/lib/constants";
 
 export default function InitialSetupPage() {
   const navigate = useNavigate();
@@ -18,6 +20,7 @@ export default function InitialSetupPage() {
   const [name, setName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [joinedDate, setJoinedDate] = useState("");
+  const [jobType, setJobType] = useState("");
   const [tagsInput, setTagsInput] = useState("");
 
   // プロフィールの初期値をセット（メールアドレス等から推定された名前が設定されている場合）
@@ -28,6 +31,7 @@ export default function InitialSetupPage() {
       setName(initialName);
       setAvatarUrl(profile.avatar_url || "");
       setJoinedDate(profile.joined_date || "");
+      setJobType(profile.job_type || "");
       setTagsInput(profile.tags ? profile.tags.join(", ") : "");
     }
   }, [profile]);
@@ -56,6 +60,7 @@ export default function InitialSetupPage() {
           name, 
           avatar_url: previewAvatarUrl,
           joined_date: joinedDate || null,
+          job_type: jobType || "",
           tags: tags.length > 0 ? tags : null,
         },
       },
@@ -120,6 +125,25 @@ export default function InitialSetupPage() {
               value={joinedDate}
               onChange={(e) => setJoinedDate(e.target.value)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="jobType">職種</Label>
+            <Select value={jobType} onValueChange={setJobType}>
+              <SelectTrigger>
+                <SelectValue placeholder="職種を選択してください" />
+              </SelectTrigger>
+              <SelectContent>
+                {JOB_TYPES.map((jt) => (
+                  <SelectItem key={jt.value} value={jt.value}>
+                    {jt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              AIインタビューで職種に合った質問が行われます。
+            </p>
           </div>
 
           <div className="space-y-2">

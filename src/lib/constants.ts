@@ -34,3 +34,15 @@ export const popularAreas = [
   "目黒",
   "川崎",
 ];
+
+/** 職種一覧 */
+export const JOB_TYPES = [
+  { value: "web-engineer", label: "Webエンジニア" },
+  { value: "salesforce-engineer", label: "Salesforceエンジニア" },
+  { value: "pm-pmo", label: "PM / PMO" },
+  { value: "sales", label: "営業" },
+  { value: "back-office", label: "バックオフィス（総務・人事・経理等）" },
+  { value: "other", label: "その他" },
+] as const;
+
+export type JobTypeValue = (typeof JOB_TYPES)[number]["value"];

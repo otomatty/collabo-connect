@@ -13,7 +13,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useUpdateProfile } from "@/hooks/useProfiles";
 import { useMyPostings } from "@/hooks/usePostings";
 import { useMyResponses } from "@/hooks/useAIQuestions";
-import { popularAreas } from "@/lib/constants";
+import { popularAreas, JOB_TYPES } from "@/lib/constants";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 
 export default function MyPage() {
@@ -25,6 +26,7 @@ export default function MyPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
+  const [jobType, setJobType] = useState("");
   const [areas, setAreas] = useState<string[]>([]);
   const [newArea, setNewArea] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -36,6 +38,7 @@ export default function MyPage() {
     if (profile) {
       setName(profile.name);
       setRole(profile.role);
+      setJobType(profile.job_type || "");
       setAreas(profile.areas);
       setTags(profile.tags);
       setAiIntro(profile.ai_intro);
@@ -47,7 +50,7 @@ export default function MyPage() {
     updateProfile.mutate(
       {
         id: user.id,
-        updates: { name, role, areas, tags, ai_intro: aiIntro },
+        updates: { name, role, job_type: jobType, areas, tags, ai_intro: aiIntro },
       },
       {
         onSuccess: () => {
@@ -87,7 +90,7 @@ export default function MyPage() {
         <UserAvatar name={name} className="h-14 w-14 text-lg" />
         <div className="space-y-0.5">
           <h2 className="text-base font-semibold">{name}</h2>
-          <p className="text-sm text-muted-foreground">{role}</p>
+          <p className="text-sm text-muted-foreground">{role}{profile?.job_type ? ` ・ ${JOB_TYPES.find((jt) => jt.value === profile.job_type)?.label ?? profile.job_type}` : ""}</p>
           <p className="text-xs text-muted-foreground">{areas.join("・")} ・ {profile?.joined_date} 入社</p>
         </div>
       </div>
@@ -181,6 +184,22 @@ export default function MyPage() {
             <div className="space-y-1.5">
               <label className="text-sm font-medium">役職</label>
               <Input value={role} onChange={(e) => setRole(e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">職種</label>
+              <Select value={jobType} onValueChange={setJobType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="職種を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {JOB_TYPES.map((jt) => (
+                    <SelectItem key={jt.value} value={jt.value}>
+                      {jt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

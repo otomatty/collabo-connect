@@ -16,6 +16,7 @@ create table public.profiles (
   role text default '',
   areas text[] default '{}',
   tags text[] default '{}',
+  job_type text default '' not null,
   ai_intro text default '',
   joined_date date default current_date,
   created_at timestamptz default now(),
