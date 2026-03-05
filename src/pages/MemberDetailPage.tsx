@@ -42,7 +42,7 @@ export default function MemberDetailPage() {
           <h1 className="text-xl font-bold">{user.name}</h1>
           <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground mt-1">
             <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {user.role}</span>
-            <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {user.areas.join("・")}</span>
+            <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {(user.areas ?? []).join("・")}</span>
           </div>
           <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
             <CalendarDays className="h-3 w-3" /> {user.joined_date} 入社
@@ -52,7 +52,7 @@ export default function MemberDetailPage() {
 
       {/* Tags */}
       <div className="flex flex-wrap justify-center gap-2">
-        {user.tags.map((tag) => (
+        {(user.tags ?? []).map((tag) => (
           <Badge key={tag} variant="secondary" className="rounded-full">
             {tag}
           </Badge>
@@ -65,7 +65,7 @@ export default function MemberDetailPage() {
           <p className="text-sm font-semibold flex items-center gap-2">
             ✨ 自己紹介
           </p>
-          <p className="text-sm leading-relaxed text-foreground/80">{user.ai_intro}</p>
+          <p className="text-sm leading-relaxed text-foreground/80">{user.ai_intro ?? ""}</p>
         </CardContent>
       </Card>
     </div>
