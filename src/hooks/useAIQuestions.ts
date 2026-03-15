@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 
 type AIQuestion = Database["public"]["Tables"]["ai_questions"]["Row"];
@@ -33,45 +32,36 @@ export function useHasAnsweredToday(
   userId: string | undefined,
   questionId: string | undefined
 ) {
-  const { session } = useAuth();
-
   return useQuery<boolean>({
     queryKey: ["ai_responses", "today", userId, questionId],
     queryFn: async () => {
-      if (!userId || !questionId || !session?.access_token) return false;
+      if (!userId || !questionId) return false;
       try {
-        await apiFetch(`/api/ai-questions/${questionId}/responses/me`, {
-          accessToken: session.access_token,
-        });
+        await apiFetch(`/api/ai-questions/${questionId}/responses/me`);
         return true;
       } catch {
         return false;
       }
     },
-    enabled: !!userId && !!questionId && !!session?.access_token,
+    enabled: !!userId && !!questionId,
   });
 }
 
 /** ユーザーの回答履歴を取得 */
 export function useMyResponses(userId: string | undefined) {
-  const { session } = useAuth();
-
   return useQuery<(AIResponse & { question: AIQuestion })[]>({
     queryKey: ["ai_responses", userId],
     queryFn: async () => {
-      if (!userId || !session?.access_token) return [];
-      return apiFetch<(AIResponse & { question: AIQuestion })[]>("/api/ai-question-responses/me", {
-        accessToken: session.access_token,
-      });
+      if (!userId) return [];
+      return apiFetch<(AIResponse & { question: AIQuestion })[]>("/api/ai-question-responses/me");
     },
-    enabled: !!userId && !!session?.access_token,
+    enabled: !!userId,
   });
 }
 
 /** 質問に回答 */
 export function useAnswerQuestion() {
   const queryClient = useQueryClient();
-  const { session } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -83,11 +73,8 @@ export function useAnswerQuestion() {
       userId: string;
       answer: string;
     }) => {
-      const token = session?.access_token;
-      if (!token) throw new Error("Not authenticated");
       return apiFetch<AIResponse>("/api/ai-question-responses", {
         method: "POST",
-        accessToken: token,
         body: { question_id: questionId, answer },
       });
     },

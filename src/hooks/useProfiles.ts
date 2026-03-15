@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -29,15 +28,11 @@ export function useProfile(id: string | undefined) {
 /** プロフィールを更新 */
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
-  const { session } = useAuth();
 
   return useMutation({
     mutationFn: async ({ id: _id, updates }: { id: string; updates: ProfileUpdate }) => {
-      const token = session?.access_token;
-      if (!token) throw new Error("Not authenticated");
       return apiFetch<Profile>("/api/profiles/me", {
         method: "PUT",
-        accessToken: token,
         body: updates,
       });
     },

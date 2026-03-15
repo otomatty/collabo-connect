@@ -1,6 +1,6 @@
 /**
  * Railway API client. All data (profiles, postings, etc.) goes through this.
- * Auth remains Supabase Auth; access_token is sent as Bearer.
+ * Auth: Better Auth session cookie is sent with credentials: "include".
  */
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -13,8 +13,6 @@ export interface ApiOptions {
   method?: string;
   body?: unknown;
   headers?: Record<string, string>;
-  /** Supabase session access_token; if not provided, no Authorization header */
-  accessToken?: string | null;
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
@@ -27,13 +25,11 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     "Content-Type": "application/json",
     ...options.headers,
   };
-  if (options.accessToken) {
-    headers.Authorization = `Bearer ${options.accessToken}`;
-  }
   const res = await fetch(url, {
     method: options.method ?? "GET",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    credentials: "include",
   });
   if (!res.ok) {
     const errBody = await res.text();

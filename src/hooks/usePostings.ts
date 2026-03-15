@@ -39,15 +39,11 @@ export function usePosting(id: string | undefined) {
 /** 投稿を作成 */
 export function useCreatePosting() {
   const queryClient = useQueryClient();
-  const { session } = useAuth();
 
   return useMutation({
     mutationFn: async (posting: PostingInsert) => {
-      const token = session?.access_token;
-      if (!token) throw new Error("Not authenticated");
       return apiFetch<PostingRow>("/api/postings", {
         method: "POST",
-        accessToken: token,
         body: {
           title: posting.title,
           category: posting.category,
@@ -68,7 +64,6 @@ export function useCreatePosting() {
 /** 参加アクションを追加/更新 */
 export function useParticipate() {
   const queryClient = useQueryClient();
-  const { session } = useAuth();
 
   return useMutation({
     mutationFn: async ({
@@ -80,11 +75,8 @@ export function useParticipate() {
       userId: string;
       action: "join" | "interested" | "online";
     }) => {
-      const token = session?.access_token;
-      if (!token) throw new Error("Not authenticated");
       return apiFetch<ParticipantRow>(`/api/postings/${postingId}/participants`, {
         method: "POST",
-        accessToken: token,
         body: { action },
       });
     },
@@ -97,15 +89,11 @@ export function useParticipate() {
 /** 参加を取り消し */
 export function useRemoveParticipation() {
   const queryClient = useQueryClient();
-  const { session } = useAuth();
 
   return useMutation({
     mutationFn: async ({ postingId }: { postingId: string; userId: string }) => {
-      const token = session?.access_token;
-      if (!token) throw new Error("Not authenticated");
       return apiFetch(`/api/postings/${postingId}/participants/me`, {
         method: "DELETE",
-        accessToken: token,
       });
     },
     onSuccess: () => {
@@ -116,16 +104,12 @@ export function useRemoveParticipation() {
 
 /** 自分が関連する投稿を取得 */
 export function useMyPostings(userId: string | undefined) {
-  const { session } = useAuth();
-
   return useQuery<PostingWithDetails[]>({
     queryKey: ["postings", "my", userId],
     queryFn: async () => {
-      if (!userId || !session?.access_token) return [];
-      return apiFetch<PostingWithDetails[]>("/api/postings/mine", {
-        accessToken: session.access_token,
-      });
+      if (!userId) return [];
+      return apiFetch<PostingWithDetails[]>("/api/postings/mine");
     },
-    enabled: !!userId && !!session?.access_token,
+    enabled: !!userId,
   });
 }

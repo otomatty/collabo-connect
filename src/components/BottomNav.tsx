@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, ClipboardList, Users, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -10,15 +10,15 @@ const tabs = [
 ];
 
 export default function BottomNav() {
-  const location = useLocation();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-sm safe-area-bottom">
       <div className="mx-auto flex max-w-lg items-center justify-around py-2">
         {tabs.map(({ to, icon: Icon, label }) => {
-          const active = to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
+          const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
           return (
-            <NavLink
+            <Link
               key={to}
               to={to}
               className={cn(
@@ -28,7 +28,7 @@ export default function BottomNav() {
             >
               <Icon className="h-5 w-5" strokeWidth={active ? 2 : 1.5} />
               <span>{label}</span>
-            </NavLink>
+            </Link>
           );
         })}
       </div>

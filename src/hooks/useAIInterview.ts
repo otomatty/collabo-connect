@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from "react";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/hooks/useAuth";
 
 // ---------- Type Definitions ----------
 export interface ChatMessage {
@@ -37,7 +36,6 @@ export interface PastResponse {
 type InterviewPhase = "idle" | "interviewing" | "generating" | "done" | "error";
 
 export function useAIInterview() {
-  const { session } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [phase, setPhase] = useState<InterviewPhase>("idle");
   const [generatedIntro, setGeneratedIntro] = useState("");
@@ -47,18 +45,12 @@ export function useAIInterview() {
 
   const personCardRef = useRef<string>("");
 
-  const invokeFunction = useCallback(
-    async <T>(payload: Record<string, unknown>): Promise<T> => {
-      const token = session?.access_token;
-      if (!token) throw new Error("Not authenticated");
-      return apiFetch<T>("/api/ai-interview", {
-        method: "POST",
-        accessToken: token,
-        body: payload,
-      });
-    },
-    [session?.access_token]
-  );
+  const invokeFunction = useCallback(async <T>(payload: Record<string, unknown>): Promise<T> => {
+    return apiFetch<T>("/api/ai-interview", {
+      method: "POST",
+      body: payload,
+    });
+  }, []);
 
   /** Start interview */
   const startInterview = useCallback(

@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
 import { useGuide } from "@/hooks/useGuide";
@@ -10,7 +10,7 @@ import AppHeader from "@/components/AppHeader";
 import { useProfile } from "@/hooks/useProfiles";
 
 export default function MemberDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams({ strict: false });
   const { shouldShow: showGuide, dismiss } = useGuide("member-detail");
   const { data: user, isLoading } = useProfile(id);
 

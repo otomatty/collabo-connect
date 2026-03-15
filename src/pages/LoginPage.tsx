@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ export default function LoginPage() {
   // 既にログイン済みならホームへ
   useEffect(() => {
     if (!loading && user) {
-      navigate("/", { replace: true });
+      navigate({ to: "/", replace: true });
     }
   }, [user, loading, navigate]);
 

@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./auth.js";
 import { getHealth } from "./routes/health.js";
 import profilesRouter from "./routes/profiles.js";
 import postingsRouter from "./routes/postings.js";
@@ -12,7 +14,19 @@ import cronRouter from "./routes/cron.js";
 const app = express();
 const port = process.env.PORT ?? 3000;
 
-app.use(cors({ origin: true }));
+// credentials: true を使う場合は origin を明示する必要がある（* は不可）
+const corsOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
+  : ["http://localhost:8080", "http://localhost:5173"];
+app.use(
+  cors({
+    origin: corsOrigins,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+app.all("/api/auth/*", toNodeHandler(auth));
 app.use(express.json());
 
 app.get("/api/health", getHealth);

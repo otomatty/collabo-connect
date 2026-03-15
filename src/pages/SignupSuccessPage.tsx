@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 
 export default function SignupSuccessPage() {
@@ -23,7 +23,7 @@ export default function SignupSuccessPage() {
 
         <Button
           className="w-full"
-          onClick={() => navigate("/login")}
+          onClick={() => navigate({ to: "/login" })}
         >
           ログイン画面に戻る
         </Button>

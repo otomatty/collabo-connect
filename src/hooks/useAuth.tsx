@@ -1,15 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client";
 import { apiFetch } from "@/lib/api";
 import type { Database } from "@/types/supabase";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 interface AuthContextType {
-  user: User | null;
+  user: { id: string; name: string; email?: string; image?: string | null } | null;
   profile: Profile | null;
-  session: Session | null;
+  session: { user: { id: string; name: string; email?: string; image?: string | null } } | null;
   loading: boolean;
   signInWithEmail: (email: string, password?: string) => Promise<void>;
   signUpWithEmail: (email: string, password?: string) => Promise<void>;
@@ -19,29 +18,27 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
 
-  const fetchProfile = async (userId: string, accessToken: string, authUser: User) => {
+  const user = session?.user ?? null;
+
+  const fetchProfile = async (userId: string, authName: string, authImage?: string | null) => {
     try {
-      const data = await apiFetch<Profile>("/api/profiles/me", {
-        accessToken,
-      });
+      const data = await apiFetch<Profile>("/api/profiles/me");
       setProfile(data);
     } catch (err) {
       if (err instanceof Error && (err.message.includes("404") || err.message.includes("Profile not found"))) {
         try {
           await apiFetch("/api/profiles", {
             method: "POST",
-            accessToken,
             body: {
-              name: authUser.user_metadata?.name ?? authUser.email ?? "User",
-              avatar_url: authUser.user_metadata?.avatar_url ?? "",
+              name: authName || "User",
+              avatar_url: authImage ?? "",
             },
           });
-          const data = await apiFetch<Profile>("/api/profiles/me", { accessToken });
+          const data = await apiFetch<Profile>("/api/profiles/me");
           setProfile(data);
         } catch {
           setProfile(null);
@@ -49,48 +46,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
       }
+    } finally {
+      setProfileLoading(false);
     }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user?.id && session?.access_token) {
-        fetchProfile(session.user.id, session.access_token, session.user);
-      }
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user?.id && session?.access_token) {
-        fetchProfile(session.user.id, session.access_token, session.user);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
+    if (sessionPending) {
+      setProfileLoading(true);
+      return;
+    }
+    if (user?.id) {
+      setProfileLoading(true);
+      fetchProfile(user.id, user.name ?? user.email ?? "User", user.image);
+    } else {
+      setProfile(null);
+      setProfileLoading(false);
+    }
+  }, [user?.id, sessionPending]);
 
   const signInWithEmail = async (email: string, password?: string) => {
     if (password) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await authClient.signIn.email({ email, password });
       if (error) throw error;
     } else {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await authClient.signIn.magicLink({
         email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
+        callbackURL: `${window.location.origin}/`,
       });
       if (error) throw error;
     }
@@ -98,25 +80,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUpWithEmail = async (email: string, password?: string) => {
     if (!password) throw new Error("Password is required for signup");
-    const { error } = await supabase.auth.signUp({
+    const { error } = await authClient.signUp.email({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-      },
+      name: email.split("@")[0],
     });
     if (error) throw error;
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    await authClient.signOut();
     setProfile(null);
-    setSession(null);
   };
 
+  const loading = sessionPending || profileLoading;
+
   return (
-    <AuthContext.Provider value={{ user, profile, session, loading, signInWithEmail, signUpWithEmail, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        session: session ?? null,
+        loading,
+        signInWithEmail,
+        signUpWithEmail,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

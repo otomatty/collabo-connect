@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { GuideModal } from "@/components/GuideModal";
 import { useGuide } from "@/hooks/useGuide";
@@ -106,7 +106,7 @@ export default function BoardCreatePage() {
         description: description.trim(),
         creator_id: user.id,
       },
-      { onSuccess: () => navigate("/board") }
+      { onSuccess: () => navigate({ to: "/board" }) }
     );
   };
 

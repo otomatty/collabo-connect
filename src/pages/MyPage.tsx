@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
 import { useGuide } from "@/hooks/useGuide";
@@ -18,7 +18,7 @@ import { useMyPostings } from "@/hooks/usePostings";
 import { useMyResponses } from "@/hooks/useAIQuestions";
 import { popularAreas, JOB_TYPES } from "@/lib/constants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/sonner";
 
 export default function MyPage() {
   const { user, profile } = useAuth();
@@ -59,7 +59,7 @@ export default function MyPage() {
       {
         onSuccess: () => {
           setIsEditing(false);
-          toast({ title: "プロフィールを更新しました" });
+          toast.success("プロフィールを更新しました");
         },
       }
     );

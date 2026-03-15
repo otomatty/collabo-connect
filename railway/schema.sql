@@ -10,7 +10,7 @@ create extension if not exists "uuid-ossp";
 -- 1. profiles (users)
 -- ============================================
 -- id は Supabase Auth の user id (UUID) と一致させる。API で挿入。
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key,
   name text not null,
   avatar_url text default '',
@@ -27,7 +27,7 @@ create table public.profiles (
 -- ============================================
 -- 2. postings (掲示板の投稿)
 -- ============================================
-create table public.postings (
+create table if not exists public.postings (
   id uuid primary key default uuid_generate_v4(),
   title text not null,
   category text not null check (category in ('food', 'study', 'event')),
@@ -44,7 +44,7 @@ create table public.postings (
 -- ============================================
 -- 3. posting_participants (投稿への参加者)
 -- ============================================
-create table public.posting_participants (
+create table if not exists public.posting_participants (
   id uuid primary key default uuid_generate_v4(),
   posting_id uuid not null references public.postings(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -56,7 +56,7 @@ create table public.posting_participants (
 -- ============================================
 -- 4. ai_questions (AIインタビュー質問)
 -- ============================================
-create table public.ai_questions (
+create table if not exists public.ai_questions (
   id uuid primary key default uuid_generate_v4(),
   question text not null,
   options text[] default '{}',
@@ -67,7 +67,7 @@ create table public.ai_questions (
 -- ============================================
 -- 5. ai_question_responses (質問への回答)
 -- ============================================
-create table public.ai_question_responses (
+create table if not exists public.ai_question_responses (
   id uuid primary key default uuid_generate_v4(),
   question_id uuid not null references public.ai_questions(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -87,10 +87,12 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists profiles_updated_at on public.profiles;
 create trigger profiles_updated_at
   before update on public.profiles
   for each row execute function public.handle_updated_at();
 
+drop trigger if exists postings_updated_at on public.postings;
 create trigger postings_updated_at
   before update on public.postings
   for each row execute function public.handle_updated_at();

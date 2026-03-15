@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
 import { useGuide } from "@/hooks/useGuide";
@@ -14,7 +14,7 @@ import { usePosting, useParticipate, useRemoveParticipation } from "@/hooks/useP
 import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
 
 export default function BoardDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams({ strict: false });
   const { user } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("board-detail");
   const { data: post, isLoading } = usePosting(id);

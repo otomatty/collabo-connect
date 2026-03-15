@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
 import { useGuide } from "@/hooks/useGuide";
@@ -23,7 +23,7 @@ import { useUpdateProfile } from "@/hooks/useProfiles";
 import { useAIInterview } from "@/hooks/useAIInterview";
 import type { PastResponse } from "@/hooks/useAIInterview";
 import { useMyResponses } from "@/hooks/useAIQuestions";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/sonner";
 
 export default function InterviewPage() {
   const navigate = useNavigate();
@@ -117,8 +117,8 @@ export default function InterviewPage() {
       { id: user.id, updates: { ai_intro: editedIntro } },
       {
         onSuccess: () => {
-          toast({ title: "自己紹介文を保存しました！" });
-          navigate("/mypage");
+          toast.success("自己紹介文を保存しました！");
+          navigate({ to: "/mypage" });
         },
       }
     );

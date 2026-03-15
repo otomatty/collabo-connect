@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { GuideModal } from "@/components/GuideModal";
 import { useGuide } from "@/hooks/useGuide";
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfiles";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/components/ui/sonner";
 import UserAvatar from "@/components/UserAvatar";
 import { JOB_TYPES } from "@/lib/constants";
 
@@ -48,7 +48,7 @@ export default function InitialSetupPage() {
   const handleSave = () => {
     if (!user) return;
     if (!name.trim()) {
-      toast({ title: "表示名を入力してください", variant: "destructive" });
+      toast.error("表示名を入力してください");
       return;
     }
 
@@ -70,11 +70,11 @@ export default function InitialSetupPage() {
       },
       {
         onSuccess: () => {
-          toast({ title: "初期設定が完了しました！" });
-          navigate("/");
+          toast.success("初期設定が完了しました！");
+          navigate({ to: "/" });
         },
         onError: () => {
-          toast({ title: "エラーが発生しました", variant: "destructive" });
+          toast.error("エラーが発生しました");
         }
       }
     );

@@ -1,4 +1,4 @@
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link } from "@tanstack/react-router";
 import { ArrowLeft, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,9 +24,9 @@ export default function AppHeader({ title, back, action, hideAvatar }: AppHeader
 
   const handleBack = () => {
     if (typeof back === "string") {
-      navigate(back);
+      navigate({ to: back });
     } else {
-      navigate(-1);
+      window.history.back();
     }
   };
 
