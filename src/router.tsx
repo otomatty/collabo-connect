@@ -4,6 +4,7 @@ import {
   createRouter,
   Outlet,
   useNavigate,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 import AppLayout from "@/components/AppLayout";
@@ -24,6 +25,7 @@ import InitialSetupPage from "@/pages/InitialSetupPage";
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   if (loading) {
     return (
@@ -39,8 +41,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   const isInitialSetup = profile && !profile.avatar_url;
   if (isInitialSetup) {
-    navigate({ to: "/setup", replace: true });
-    return null;
+    if (pathname !== "/setup") {
+      navigate({ to: "/setup", replace: true });
+      return null;
+    }
+    return <>{children}</>;
   }
 
   return <>{children}</>;
