@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -9,14 +10,7 @@ type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 export function useProfiles() {
   return useQuery<Profile[]>({
     queryKey: ["profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: async () => apiFetch<Profile[]>("/api/profiles"),
   });
 }
 
@@ -26,13 +20,7 @@ export function useProfile(id: string | undefined) {
     queryKey: ["profiles", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) throw error;
-      return data;
+      return apiFetch<Profile>(`/api/profiles/${id}`);
     },
     enabled: !!id,
   });
@@ -41,22 +29,23 @@ export function useProfile(id: string | undefined) {
 /** プロフィールを更新 */
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
+  const { session } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: ProfileUpdate }) => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .update(updates)
-        .eq("id", id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+    mutationFn: async ({ id: _id, updates }: { id: string; updates: ProfileUpdate }) => {
+      const token = session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      return apiFetch<Profile>("/api/profiles/me", {
+        method: "PUT",
+        accessToken: token,
+        body: updates,
+      });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      if (!data) return;
-      queryClient.setQueryData(["profiles", data.id], data);
+      if (data) {
+        queryClient.setQueryData(["profiles", data.id], data);
+      }
     },
   });
 }

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
 import type { Database } from "@/types/supabase";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -23,35 +24,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // プロフィールを取得
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    setProfile(data);
+  const fetchProfile = async (userId: string, accessToken: string, authUser: User) => {
+    try {
+      const data = await apiFetch<Profile>("/api/profiles/me", {
+        accessToken,
+      });
+      setProfile(data);
+    } catch (err) {
+      if (err instanceof Error && (err.message.includes("404") || err.message.includes("Profile not found"))) {
+        try {
+          await apiFetch("/api/profiles", {
+            method: "POST",
+            accessToken,
+            body: {
+              name: authUser.user_metadata?.name ?? authUser.email ?? "User",
+              avatar_url: authUser.user_metadata?.avatar_url ?? "",
+            },
+          });
+          const data = await apiFetch<Profile>("/api/profiles/me", { accessToken });
+          setProfile(data);
+        } catch {
+          setProfile(null);
+        }
+      } else {
+        setProfile(null);
+      }
+    }
   };
 
   useEffect(() => {
-    // 現在のセッションを取得
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      if (session?.user?.id && session?.access_token) {
+        fetchProfile(session.user.id, session.access_token, session.user);
       }
       setLoading(false);
     });
 
-    // 認証状態の変更を監視
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      if (session?.user?.id && session?.access_token) {
+        fetchProfile(session.user.id, session.access_token, session.user);
       } else {
         setProfile(null);
       }

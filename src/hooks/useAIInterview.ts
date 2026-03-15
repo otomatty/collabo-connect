@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 // ---------- Type Definitions ----------
 export interface ChatMessage {
@@ -36,6 +37,7 @@ export interface PastResponse {
 type InterviewPhase = "idle" | "interviewing" | "generating" | "done" | "error";
 
 export function useAIInterview() {
+  const { session } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [phase, setPhase] = useState<InterviewPhase>("idle");
   const [generatedIntro, setGeneratedIntro] = useState("");
@@ -43,19 +45,19 @@ export function useAIInterview() {
   const [error, setError] = useState<string | null>(null);
   const [interviewDone, setInterviewDone] = useState(false);
 
-  // personCard is accumulated summary managed by the AI
   const personCardRef = useRef<string>("");
 
-  /** Edge Function helper */
   const invokeFunction = useCallback(
     async <T>(payload: Record<string, unknown>): Promise<T> => {
-      const { data, error } = await supabase.functions.invoke("ai-interview", {
+      const token = session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      return apiFetch<T>("/api/ai-interview", {
+        method: "POST",
+        accessToken: token,
         body: payload,
       });
-      if (error) throw new Error(error.message ?? "Edge Function error");
-      return data as T;
     },
-    []
+    [session?.access_token]
   );
 
   /** Start interview */

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 import type { Database } from "@/types/supabase";
 
 type AIQuestion = Database["public"]["Tables"]["ai_questions"]["Row"];
@@ -9,40 +10,20 @@ type AIResponse = Database["public"]["Tables"]["ai_question_responses"]["Row"];
 export function useAIQuestions() {
   return useQuery<AIQuestion[]>({
     queryKey: ["ai_questions"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ai_questions")
-        .select("*")
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: async () => apiFetch<AIQuestion[]>("/api/ai-questions"),
   });
-}
-
-/** 今日の日付を YYYY-MM-DD 形式で返す（ローカルタイムゾーン） */
-function getTodayDateString(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 /** 今日の質問を取得（date が今日の質問のみ） */
 export function useTodayQuestion() {
-  const today = getTodayDateString();
   return useQuery<AIQuestion | null>({
-    queryKey: ["ai_questions", "today", today],
+    queryKey: ["ai_questions", "today"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ai_questions")
-        .select("*")
-        .eq("date", today)
-        .limit(1)
-        .single();
-      if (error && error.code !== "PGRST116") throw error;
-      return data;
+      try {
+        return await apiFetch<AIQuestion>("/api/ai-questions/today");
+      } catch {
+        return null;
+      }
     },
   });
 }
@@ -52,66 +33,63 @@ export function useHasAnsweredToday(
   userId: string | undefined,
   questionId: string | undefined
 ) {
+  const { session } = useAuth();
+
   return useQuery<boolean>({
     queryKey: ["ai_responses", "today", userId, questionId],
     queryFn: async () => {
-      if (!userId || !questionId) return false;
-      const { data, error } = await supabase
-        .from("ai_question_responses")
-        .select("id")
-        .eq("question_id", questionId)
-        .eq("user_id", userId)
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return !!data;
+      if (!userId || !questionId || !session?.access_token) return false;
+      try {
+        await apiFetch(`/api/ai-questions/${questionId}/responses/me`, {
+          accessToken: session.access_token,
+        });
+        return true;
+      } catch {
+        return false;
+      }
     },
-    enabled: !!userId && !!questionId,
+    enabled: !!userId && !!questionId && !!session?.access_token,
   });
 }
 
 /** ユーザーの回答履歴を取得 */
 export function useMyResponses(userId: string | undefined) {
+  const { session } = useAuth();
+
   return useQuery<(AIResponse & { question: AIQuestion })[]>({
     queryKey: ["ai_responses", userId],
     queryFn: async () => {
-      if (!userId) return [];
-      const { data, error } = await supabase
-        .from("ai_question_responses")
-        .select("*, question:ai_questions(*)")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as unknown as (AIResponse & { question: AIQuestion })[];
+      if (!userId || !session?.access_token) return [];
+      return apiFetch<(AIResponse & { question: AIQuestion })[]>("/api/ai-question-responses/me", {
+        accessToken: session.access_token,
+      });
     },
-    enabled: !!userId,
+    enabled: !!userId && !!session?.access_token,
   });
 }
 
 /** 質問に回答 */
 export function useAnswerQuestion() {
   const queryClient = useQueryClient();
+  const { session } = useAuth();
 
   return useMutation({
     mutationFn: async ({
       questionId,
-      userId,
+      userId: _userId,
       answer,
     }: {
       questionId: string;
       userId: string;
       answer: string;
     }) => {
-      const { data, error } = await supabase
-        .from("ai_question_responses")
-        .upsert(
-          { question_id: questionId, user_id: userId, answer },
-          { onConflict: "question_id,user_id" }
-        )
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+      const token = session?.access_token;
+      if (!token) throw new Error("Not authenticated");
+      return apiFetch<AIResponse>("/api/ai-question-responses", {
+        method: "POST",
+        accessToken: token,
+        body: { question_id: questionId, answer },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai_questions"] });
