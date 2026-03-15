@@ -13,13 +13,22 @@ router.get("/", async (_req: Request, res: Response): Promise<void> => {
   res.json(r.rows);
 });
 
-/** GET /api/profiles/me - current user's profile (auth required) */
+/** GET /api/profiles/me - current user's profile (auth required). Creates a default row if none exists (e.g. new magic-link user). */
 router.get("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;
-  const r = await pool.query<Profile>(
+  let r = await pool.query<Profile>(
     "SELECT * FROM public.profiles WHERE id = $1",
     [userId]
   );
+  if (r.rows.length === 0) {
+    await pool.query(
+      `INSERT INTO public.profiles (id, name, avatar_url, job_type)
+       VALUES ($1, 'User', '', '')
+       ON CONFLICT (id) DO NOTHING`,
+      [userId]
+    );
+    r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [userId]);
+  }
   if (r.rows.length === 0) {
     res.status(404).json({ error: "Profile not found" });
     return;
