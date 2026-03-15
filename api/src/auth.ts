@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
+import { getMagicLinkEmailHtml } from "./email-templates/magic-link.js";
 import { pool } from "./db.js";
 
 const baseURL = process.env.BETTER_AUTH_URL ?? process.env.RAILWAY_STATIC_URL ?? "http://localhost:3000";
@@ -34,7 +35,7 @@ export const auth = betterAuth({
               from: process.env.RESEND_FROM ?? "onboarding@resend.dev",
               to: email,
               subject: "Collabo Connect ログインリンク",
-              html: `ログインするには以下のリンクをクリックしてください：<br><a href="${url}">${url}</a>`,
+              html: getMagicLinkEmailHtml(url),
             }),
           });
           if (!res.ok) {

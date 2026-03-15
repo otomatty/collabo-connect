@@ -73,8 +73,8 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
 ## 4. 実装上の挙動
 
 - **送信処理**: `api/src/auth.ts` の Better Auth `magicLink` プラグイン内で、`sendMagicLink` が Resend API（`POST https://api.resend.com/emails`）を呼び出す。
-- **メール内容**: 件名「Collabo Connect ログインリンク」、本文にログイン用 URL を記載。
-- カスタムしたい場合は `api/src/auth.ts` の `html` や `subject` を編集する。
+- **メール内容**: 件名「Collabo Connect ログインリンク」。本文は Collabo Connect のブランド（オレンジ・クリーム色・角丸）に合わせた HTML テンプレートで、ログイン用 CTA ボタンと URL を記載。
+- **テンプレートのカスタム**: メールのデザインや文言を変えたい場合は `api/src/email-templates/magic-link.ts` の `getMagicLinkEmailHtml` を編集する。件名だけ変えたい場合は `api/src/auth.ts` の `subject` を編集する。
 
 ## 5. チェックリスト
 

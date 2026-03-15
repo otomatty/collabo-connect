@@ -58,11 +58,10 @@ export interface PostingWithDetails extends Posting {
   participants: (PostingParticipant & { profile: Profile | null })[];
 }
 
-/** Extend Express Request with optional userId (set by auth middleware) */
-declare global {
-  namespace Express {
-    interface Request {
-      userId?: string;
-    }
+/** Extend Express Request with optional userId (set by auth middleware). Module augmentation (no namespace). */
+import type {} from "express";
+declare module "express-serve-static-core" {
+  interface Request {
+    userId?: string;
   }
 }
