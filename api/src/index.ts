@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
+import { parseCommaSeparatedList } from "./env-utils.js";
 import { auth } from "./auth.js";
 import { getHealth } from "./routes/health.js";
 import profilesRouter from "./routes/profiles.js";
@@ -14,10 +15,11 @@ import cronRouter from "./routes/cron.js";
 const app = express();
 const port = process.env.PORT ?? 3000;
 
-// credentials: true を使う場合は origin を明示する必要がある（* は不可）
-const corsOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim())
-  : ["http://localhost:8080", "http://localhost:5173"];
+// credentials: true を使う場合は origin を明示する必要がある（* は不可）。複数指定時もカンマ区切りを正しくパースする。
+const corsOrigins = (() => {
+  const list = parseCommaSeparatedList(process.env.CORS_ORIGINS);
+  return list.length > 0 ? list : ["http://localhost:8080", "http://localhost:5173"];
+})();
 app.use(
   cors({
     origin: corsOrigins,

@@ -76,6 +76,14 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
 - **メール内容**: 件名「Collabo Connect ログインリンク」。本文は Collabo Connect のブランド（オレンジ・クリーム色・角丸）に合わせた HTML テンプレートで、ログイン用 CTA ボタンと URL を記載。
 - **テンプレートのカスタム**: メールのデザインや文言を変えたい場合は `api/src/email-templates/magic-link.ts` の `getMagicLinkEmailHtml` を編集する。件名だけ変えたい場合は `api/src/auth.ts` の `subject` を編集する。
 
+### 4.1 マジックリンクでログインできない場合（ログインページに飛ばされる）
+
+メール内の URL をクリックしたあと、認証されずログインページに戻ってしまう場合は、以下を確認してください。
+
+- **`BETTER_AUTH_URL`（api の環境変数）**: 必ず **API のベース URL**（`/api/auth` を提供しているサーバーのオリジン）を指定すること。例: `https://your-api.up.railway.app`。ここをフロントの URL（例: Vercel のアプリ URL）にしてしまうと、リンクがフロントを指してしまい、verify が実行されずセッションが作られません。
+- **`BETTER_AUTH_TRUSTED_ORIGINS`**: 認証後にリダイレクトする先のオリジンを列挙します。**フロントのオリジン**（ユーザーが開くアプリの URL）を必ず含めてください。例: `https://your-app.vercel.app` や `http://localhost:8080`。含まれていないと、verify 後のリダイレクトが拒否され、アプリ画面に遷移できません。
+- **本番で API とフロントが別オリジンの場合**: セッション Cookie が別オリジンへ送信されるよう、本番では `api/src/auth.ts` で `defaultCookieAttributes`（`sameSite: "none"`, `secure: true`）を設定しています。フロントの `auth-client` では `fetchOptions: { credentials: "include" }` を指定して Cookie を送るようにしています。
+
 ## 5. チェックリスト
 
 - [ ] Resend アカウント作成
@@ -92,6 +100,7 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
 | メールが届かない | サンドボックス時は送信先が Resend に登録したメールか。迷惑メールフォルダも確認。 |
 | Resend API エラー（4xx/5xx） | ダッシュボードの [Logs](https://resend.com/emails) で該当送信のエラー内容を確認。`RESEND_FROM` が未認証ドメインになっていないか。 |
 | 開発でメールを送りたくない | `RESEND_API_KEY` を設定しなければ、ログに URL が出力されるだけ。 |
+| リンクをクリックしてもログインできずログインページに飛ばされる | 上記「4.1 マジックリンクでログインできない場合」を参照。`BETTER_AUTH_URL` が API の URL か、`BETTER_AUTH_TRUSTED_ORIGINS` にフロントのオリジンが入っているか確認。 |
 
 ## 参考リンク
 

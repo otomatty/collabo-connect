@@ -3,11 +3,14 @@ import { betterAuth } from "better-auth";
 import { magicLink } from "better-auth/plugins";
 import { getMagicLinkEmailHtml } from "./email-templates/magic-link.js";
 import { pool } from "./db.js";
+import { parseCommaSeparatedList } from "./env-utils.js";
 
+// マジックリンクの URL はこの baseURL で生成される。必ず API のオリジン（/api/auth を提供するサーバー）を指定すること。フロントの URL にするとクリック後に verify されずログインできない。
 const baseURL = process.env.BETTER_AUTH_URL ?? process.env.RAILWAY_STATIC_URL ?? "http://localhost:3000";
-const trustedOrigins = process.env.BETTER_AUTH_TRUSTED_ORIGINS
-  ? process.env.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((s) => s.trim())
-  : undefined;
+const trustedOriginsList = parseCommaSeparatedList(process.env.BETTER_AUTH_TRUSTED_ORIGINS);
+const trustedOrigins = trustedOriginsList.length > 0 ? trustedOriginsList : undefined;
+
+const isProduction = process.env.NODE_ENV === "production";
 
 export const auth = betterAuth({
   database: pool,
@@ -53,5 +56,12 @@ export const auth = betterAuth({
     database: {
       generateId: () => randomUUID(),
     },
+    // 本番で API とフロントが別オリジンの場合、リダイレクト後にフロントから getSession する際に Cookie を送るために必要
+    ...(isProduction && {
+      defaultCookieAttributes: {
+        sameSite: "none",
+        secure: true,
+      },
+    }),
   },
 });
