@@ -22,7 +22,6 @@ export default function InitialSetupPage() {
   const updateProfile = useUpdateProfile();
   
   const [name, setName] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
   const [joinedDate, setJoinedDate] = useState("");
   const [jobType, setJobType] = useState("");
   const [tagsInput, setTagsInput] = useState("");
@@ -33,16 +32,15 @@ export default function InitialSetupPage() {
       // メールアドレスがそのまま名前になっている場合は空にして入力させる
       const initialName = profile.name.includes("@") ? "" : profile.name;
       setName(initialName);
-      setAvatarUrl(profile.avatar_url || "");
       setJoinedDate(profile.joined_date || "");
       setJobType(profile.job_type || "");
       setTagsInput(profile.tags ? profile.tags.join(", ") : "");
     }
   }, [profile]);
 
-  // URLが空の場合は、名前をシードにしたデフォルトのアバターURLを生成
-  const previewAvatarUrl = avatarUrl.trim() 
-    ? avatarUrl.trim() 
+  // 既存のアバターURLがあればそれを使用、なければ名前ベースのデフォルトアバター
+  const previewAvatarUrl = profile?.avatar_url?.trim()
+    ? profile.avatar_url.trim()
     : (name.trim() ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}` : "");
 
   const handleSave = () => {
@@ -60,9 +58,9 @@ export default function InitialSetupPage() {
     updateProfile.mutate(
       {
         id: user.id,
-        updates: { 
-          name, 
-          avatar_url: previewAvatarUrl,
+        updates: {
+          name,
+          avatar_url: profile?.avatar_url?.trim() || previewAvatarUrl,
           joined_date: joinedDate || null,
           job_type: jobType || "",
           tags: tags.length > 0 ? tags : null,
@@ -95,20 +93,6 @@ export default function InitialSetupPage() {
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
             <UserAvatar name={name || "User"} url={previewAvatarUrl} className="h-24 w-24 text-3xl" />
-
-            
-            <div className="w-full space-y-2">
-              <Label htmlFor="avatarUrl">画像URL (任意)</Label>
-              <Input
-                id="avatarUrl"
-                placeholder="https://example.com/icon.png"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground text-center">
-                ※URLを指定しない場合は、名前の頭文字が表示されます。
-              </p>
-            </div>
           </div>
 
           <div className="space-y-2">
