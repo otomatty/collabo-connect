@@ -10,9 +10,8 @@ const MONTHS = [
 ];
 
 const currentYear = new Date().getFullYear();
-const YEAR_MIN = currentYear - 50;
-const YEAR_MAX = currentYear + 2;
-const YEARS = Array.from({ length: YEAR_MAX - YEAR_MIN + 1 }, (_, i) => YEAR_MIN + i);
+const YEAR_MIN = currentYear - 9;
+const YEARS = Array.from({ length: 10 }, (_, i) => currentYear - i);
 
 export interface MonthYearPickerProps {
   value: string;
@@ -95,7 +94,7 @@ export function MonthYearPicker({
             className={cn(
               "flex h-12 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-4 py-3 text-left text-base",
               "outline-none transition-[border-color,box-shadow] duration-200",
-              "hover:border-input hover:bg-muted/30",
+              "hover:border-input hover:bg-primary/10",
               "focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-0",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
@@ -128,14 +127,14 @@ export function MonthYearPicker({
               <label className="mb-1 block text-xs font-medium text-muted-foreground">年</label>
               <ScrollArea className="h-[180px] rounded-lg border border-input bg-muted/50">
                 <div className="p-2">
-                  {YEARS.slice().reverse().map((y) => (
+                  {YEARS.map((y) => (
                     <button
                       key={y}
                       type="button"
                       onClick={() => setYear(y)}
                       className={cn(
                         "flex w-full items-center justify-center rounded-full py-2.5 text-sm transition-colors",
-                        "hover:bg-muted",
+                        "hover:bg-primary/10",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                         year === y && "bg-primary text-primary-foreground font-medium",
                       )}
@@ -159,7 +158,7 @@ export function MonthYearPicker({
                       onClick={() => handleSelectMonth(m)}
                       className={cn(
                         "rounded-full py-2.5 text-sm transition-colors",
-                        "hover:bg-muted",
+                        "hover:bg-primary/10",
                         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
                         isSelected && "bg-primary text-primary-foreground font-medium",
                       )}
