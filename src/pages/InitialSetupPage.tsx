@@ -14,6 +14,7 @@ import { toast } from "@/components/ui/sonner";
 import UserAvatar from "@/components/UserAvatar";
 import { JOB_TYPES, popularTags } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
+import { MonthYearPicker } from "@/components/MonthYearPicker";
 
 export default function InitialSetupPage() {
   const navigate = useNavigate();
@@ -140,15 +141,13 @@ export default function InitialSetupPage() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="joinedDate">入社年月 (任意)</Label>
-            <Input
-              id="joinedDate"
-              type="month"
-              value={joinedDate}
-              onChange={(e) => setJoinedDate(e.target.value)}
-            />
-          </div>
+          <MonthYearPicker
+            id="joinedDate"
+            label="入社年月 (任意)"
+            value={joinedDate}
+            onChange={setJoinedDate}
+            placeholder="選択してください"
+          />
 
           <div className="space-y-2">
             <Label htmlFor="jobType">職種</Label>
