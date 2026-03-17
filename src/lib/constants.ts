@@ -52,3 +52,21 @@ export const JOB_TYPES = [
 ] as const;
 
 export type JobTypeValue = (typeof JOB_TYPES)[number]["value"];
+
+/** 興味・スキルでよくある項目（セットアップ等でクイック選択用） */
+export const popularTags = [
+  "React",
+  "TypeScript",
+  "JavaScript",
+  "Python",
+  "読書",
+  "キャンプ",
+  "カフェ",
+  "ランニング",
+  "料理",
+  "写真",
+  "音楽",
+  "旅行",
+  "ゲーム",
+  "映画",
+];

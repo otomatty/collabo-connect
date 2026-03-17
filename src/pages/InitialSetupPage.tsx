@@ -12,7 +12,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfiles";
 import { toast } from "@/components/ui/sonner";
 import UserAvatar from "@/components/UserAvatar";
-import { JOB_TYPES } from "@/lib/constants";
+import { JOB_TYPES, popularTags } from "@/lib/constants";
+import { Badge } from "@/components/ui/badge";
 
 export default function InitialSetupPage() {
   const navigate = useNavigate();
@@ -27,12 +28,9 @@ export default function InitialSetupPage() {
   const [tagsInput, setTagsInput] = useState("");
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 
-  // プロフィールの初期値をセット（メールアドレス等から推定された名前が設定されている場合）
+  // プロフィールの初期値をセット（表示名はデフォルト空のためセットしない）
   useEffect(() => {
     if (profile) {
-      // メールアドレスがそのまま名前になっている場合は空にして入力させる
-      const initialName = profile.name.includes("@") ? "" : profile.name;
-      setName(initialName);
       setJoinedDate(profile.joined_date || "");
       setJobType(profile.job_type || "");
       setTagsInput(profile.tags ? profile.tags.join(", ") : "");
@@ -44,6 +42,15 @@ export default function InitialSetupPage() {
     ? profile.avatar_url.trim()
     : (name.trim() ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}` : "");
   const displayAvatarUrl = avatarDataUrl ?? previewAvatarUrl;
+
+  const addTag = (tag: string) => {
+    const current = tagsInput
+      .split(/[,、]/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (current.includes(tag)) return;
+    setTagsInput(current.length ? [...current, tag].join(", ") : tag);
+  };
 
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -164,6 +171,22 @@ export default function InitialSetupPage() {
 
           <div className="space-y-2">
             <Label htmlFor="tags">興味があること / スキル (任意)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {popularTags.map((tag) => {
+                const current = tagsInput.split(/[,、]/).map((t) => t.trim()).filter(Boolean);
+                const selected = current.includes(tag);
+                return (
+                  <Badge
+                    key={tag}
+                    variant={selected ? "secondary" : "outline"}
+                    className="cursor-pointer rounded-full text-xs font-normal transition-colors hover:bg-secondary"
+                    onClick={() => addTag(tag)}
+                  >
+                    {selected ? "✓ " : "+ "}{tag}
+                  </Badge>
+                );
+              })}
+            </div>
             <Input
               id="tags"
               placeholder="カンマ区切りで入力 (例: React, 読書, キャンプ)"
@@ -171,7 +194,7 @@ export default function InitialSetupPage() {
               onChange={(e) => setTagsInput(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              カンマまたは読点で区切って複数入力できます。
+              上の項目を選ぶか、カンマまたは読点で区切って入力できます。
             </p>
           </div>
 
