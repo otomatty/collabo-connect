@@ -70,38 +70,43 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
 
 /** PUT /api/profiles/me - update current user's profile */
 router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const body = req.body as Partial<Profile>;
-  const allowed = [
-    "name", "avatar_url", "role", "areas", "tags", "job_type", "ai_intro", "joined_date",
-  ] as const;
-  const updates: string[] = [];
-  const values: unknown[] = [];
-  let i = 1;
-  for (const key of allowed) {
-    if (key in body) {
-      updates.push(`${key} = $${i}`);
-      values.push(body[key]);
-      i++;
+  try {
+    const userId = req.userId!;
+    const body = req.body as Partial<Profile>;
+    const allowed = [
+      "name", "avatar_url", "role", "areas", "tags", "job_type", "ai_intro", "joined_date",
+    ] as const;
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+    for (const key of allowed) {
+      if (key in body) {
+        updates.push(`${key} = $${i}`);
+        values.push(body[key]);
+        i++;
+      }
     }
-  }
-  if (updates.length === 0) {
-    const r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [userId]);
+    if (updates.length === 0) {
+      const r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [userId]);
+      if (r.rows.length === 0) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      res.json(r.rows[0]);
+      return;
+    }
+    values.push(userId);
+    const q = `UPDATE public.profiles SET ${updates.join(", ")} WHERE id = $${i} RETURNING *`;
+    const r = await pool.query<Profile>(q, values);
     if (r.rows.length === 0) {
       res.status(404).json({ error: "Profile not found" });
       return;
     }
     res.json(r.rows[0]);
-    return;
+  } catch (err) {
+    console.error("PUT /api/profiles/me error:", err);
+    res.status(500).json({ error: "Failed to update profile" });
   }
-  values.push(userId);
-  const q = `UPDATE public.profiles SET ${updates.join(", ")} WHERE id = $${i} RETURNING *`;
-  const r = await pool.query<Profile>(q, values);
-  if (r.rows.length === 0) {
-    res.status(404).json({ error: "Profile not found" });
-    return;
-  }
-  res.json(r.rows[0]);
 });
 
 export default router;

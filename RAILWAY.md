@@ -12,7 +12,7 @@
 
 - プロジェクト `collabo-connect` 作成・リンク済み
 - Postgres / api / web サービス追加済み
-- api 用環境変数: `DATABASE_URL`（Postgres 参照）、`BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` / `GEMINI_API_KEY` / `CRON_SECRET`（要ダッシュボードで実値に変更）
+- api 用環境変数: `DATABASE_URL`（Postgres 参照）、`BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` / `BETTER_AUTH_TRUSTED_ORIGINS` / `CORS_ORIGINS` / `GEMINI_API_KEY` / `CRON_SECRET`（要ダッシュボードで実値に変更）。**CORS_ORIGINS** に本番 Web のオリジンを含める（例: `https://web-production-28ea3.up.railway.app`）。含めないとブラウザから API 呼び出しで CORS エラーになる。
 - web 用: `VITE_API_URL=https://api-production-4d1b.up.railway.app` 設定済み
 - 各サービスの Railway 提供ドメインを発行済み
 
@@ -29,6 +29,7 @@
    - `BETTER_AUTH_URL`: API の公開 URL（例: `https://api-production-4d1b.up.railway.app`）  
    - `BETTER_AUTH_TRUSTED_ORIGINS`: **ホスト済み Web と localhost の両方**をカンマ区切りで指定（プロトタイプでローカルから本番 API に繋ぐため）。  
      例: `https://web-production-28ea3.up.railway.app,http://localhost:8080`  
+   - **`CORS_ORIGINS`**: 同上。API がブラウザからのリクエストを許可するオリジン。未設定だと本番 Web から API 呼び出しで CORS エラーになる。例: `https://web-production-28ea3.up.railway.app,http://localhost:8080,http://localhost:5173`  
    - マジックリンク送信（本番）: `RESEND_API_KEY` と任意で `RESEND_FROM` を設定（手順は [RESEND.md](RESEND.md) を参照）  
    - CRON_SECRET: ランダム文字列（Cron 実行時に `x-cron-secret` ヘッダで送る値）
 
