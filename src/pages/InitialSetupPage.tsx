@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile, useUpdateProfile } from "@/hooks/useProfiles";
 import { toast } from "@/components/ui/sonner";
 import UserAvatar from "@/components/UserAvatar";
+import { ImageIcon } from "lucide-react";
 import { JOB_TYPES, popularTags } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { MonthYearPicker } from "@/components/MonthYearPicker";
@@ -116,7 +117,7 @@ export default function InitialSetupPage() {
           <div className="flex flex-col items-center space-y-4">
             <label
               htmlFor="avatar-upload"
-              className="cursor-pointer rounded-full transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              className="group relative flex cursor-pointer rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               aria-label="クリックで画像を変更"
             >
               <input
@@ -127,6 +128,13 @@ export default function InitialSetupPage() {
                 onChange={handleAvatarFileChange}
               />
               <UserAvatar name={name || "User"} url={displayAvatarUrl} className="h-24 w-24 text-3xl" />
+              <span
+                className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                aria-hidden
+              >
+                <ImageIcon className="h-8 w-8 text-white" />
+                <span className="text-xs font-medium text-white">画像を選択する</span>
+              </span>
             </label>
           </div>
 
