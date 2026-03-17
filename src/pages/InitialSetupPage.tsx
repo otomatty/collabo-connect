@@ -25,6 +25,7 @@ export default function InitialSetupPage() {
   const [joinedDate, setJoinedDate] = useState("");
   const [jobType, setJobType] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 
   // プロフィールの初期値をセット（メールアドレス等から推定された名前が設定されている場合）
   useEffect(() => {
@@ -42,6 +43,19 @@ export default function InitialSetupPage() {
   const previewAvatarUrl = profile?.avatar_url?.trim()
     ? profile.avatar_url.trim()
     : (name.trim() ? `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}` : "");
+  const displayAvatarUrl = avatarDataUrl ?? previewAvatarUrl;
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") setAvatarDataUrl(result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   const handleSave = () => {
     if (!user) return;
@@ -60,7 +74,7 @@ export default function InitialSetupPage() {
         id: user.id,
         updates: {
           name,
-          avatar_url: profile?.avatar_url?.trim() || previewAvatarUrl,
+          avatar_url: avatarDataUrl ?? profile?.avatar_url?.trim() ?? previewAvatarUrl,
           joined_date: joinedDate || null,
           job_type: jobType || "",
           tags: tags.length > 0 ? tags : null,
@@ -92,7 +106,20 @@ export default function InitialSetupPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-col items-center space-y-4">
-            <UserAvatar name={name || "User"} url={previewAvatarUrl} className="h-24 w-24 text-3xl" />
+            <label
+              htmlFor="avatar-upload"
+              className="cursor-pointer rounded-full transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              aria-label="クリックで画像を変更"
+            >
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={handleAvatarFileChange}
+              />
+              <UserAvatar name={name || "User"} url={displayAvatarUrl} className="h-24 w-24 text-3xl" />
+            </label>
           </div>
 
           <div className="space-y-2">
