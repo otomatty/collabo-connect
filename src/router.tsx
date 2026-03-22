@@ -48,6 +48,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  if (pathname === "/setup") {
+    navigate({ to: "/", replace: true });
+    return null;
+  }
+
   return <>{children}</>;
 }
 

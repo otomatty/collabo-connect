@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { pool } from "../db.js";
+import { getTodayInJst } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { AiQuestion } from "../types.js";
 
@@ -15,11 +16,7 @@ router.get("/", async (_req: Request, res: Response): Promise<void> => {
 
 /** GET /api/ai-questions/today - single question for today (by date) */
 router.get("/today", async (_req: Request, res: Response): Promise<void> => {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const today = `${y}-${m}-${d}`;
+  const today = getTodayInJst();
   const r = await pool.query<AiQuestion>(
     "SELECT * FROM public.ai_questions WHERE date = $1 LIMIT 1",
     [today]

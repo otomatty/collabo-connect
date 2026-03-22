@@ -10,6 +10,8 @@ interface AuthContextType {
   profile: Profile | null;
   session: { user: { id: string; name: string; email?: string; image?: string | null } } | null;
   loading: boolean;
+  setProfile: (profile: Profile | null) => void;
+  refreshProfile: () => Promise<void>;
   signInWithEmail: (email: string, password?: string) => Promise<void>;
   signUpWithEmail: (email: string, password?: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -63,7 +65,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       setProfileLoading(false);
     }
-  }, [user?.id, sessionPending]);
+  }, [user?.email, user?.id, user?.image, user?.name, sessionPending]);
+
+  const refreshProfile = async () => {
+    if (!user?.id) {
+      setProfile(null);
+      return;
+    }
+
+    setProfileLoading(true);
+    await fetchProfile(user.id, user.name ?? user.email ?? "User", user.image);
+  };
 
   const signInWithEmail = async (email: string, password?: string) => {
     if (password) {
@@ -102,6 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         session: session ?? null,
         loading,
+        setProfile,
+        refreshProfile,
         signInWithEmail,
         signUpWithEmail,
         signOut,

@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { pool } from "../db.js";
+import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { Profile } from "../types.js";
 
@@ -72,7 +73,10 @@ router.get("/:id", async (req: Request, res: Response): Promise<void> => {
 router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.userId!;
-    const body = req.body as Partial<Profile>;
+    const body = { ...(req.body as Partial<Profile>) };
+    if (Object.prototype.hasOwnProperty.call(body, "joined_date")) {
+      body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
+    }
     const allowed = [
       "name", "avatar_url", "role", "areas", "tags", "job_type", "ai_intro", "joined_date",
     ] as const;
@@ -104,6 +108,10 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
     }
     res.json(r.rows[0]);
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith("joined_date")) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     console.error("PUT /api/profiles/me error:", err);
     res.status(500).json({ error: "Failed to update profile" });
   }

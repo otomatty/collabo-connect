@@ -19,7 +19,7 @@ import { MonthYearPicker } from "@/components/MonthYearPicker";
 
 export default function InitialSetupPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setProfile } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("setup");
   const { data: profile } = useProfile(user?.id);
   const updateProfile = useUpdateProfile();
@@ -90,7 +90,8 @@ export default function InitialSetupPage() {
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: (updatedProfile) => {
+          setProfile(updatedProfile);
           toast.success("初期設定が完了しました！");
           navigate({ to: "/" });
         },
