@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { apiFetch } from "@/lib/api";
+import { setupDebug } from "@/lib/setupDebug";
 import type { Database } from "@/types/supabase";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -27,12 +28,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const user = session?.user ?? null;
 
   const fetchProfile = async (userId: string, authName: string, authImage?: string | null) => {
+    setupDebug("useAuth.fetchProfile:start", {
+      userId,
+      authName,
+      hasAuthImage: Boolean(authImage),
+    });
     try {
       const data = await apiFetch<Profile>("/api/profiles/me");
+      setupDebug("useAuth.fetchProfile:success", {
+        userId,
+        profileId: data.id,
+        avatarUrl: data.avatar_url,
+        name: data.name,
+      });
       setProfile(data);
     } catch (err) {
+      setupDebug("useAuth.fetchProfile:error", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       if (err instanceof Error && (err.message.includes("404") || err.message.includes("Profile not found"))) {
         try {
+          setupDebug("useAuth.fetchProfile:createProfile", {
+            userId,
+            authName,
+          });
           await apiFetch("/api/profiles", {
             method: "POST",
             body: {
@@ -41,19 +61,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
           });
           const data = await apiFetch<Profile>("/api/profiles/me");
+          setupDebug("useAuth.fetchProfile:createProfileSuccess", {
+            userId,
+            profileId: data.id,
+            avatarUrl: data.avatar_url,
+          });
           setProfile(data);
         } catch {
+          setupDebug("useAuth.fetchProfile:createProfileError", {
+            userId,
+          });
           setProfile(null);
         }
       } else {
         setProfile(null);
       }
     } finally {
+      setupDebug("useAuth.fetchProfile:finally", {
+        userId,
+      });
       setProfileLoading(false);
     }
   };
 
   useEffect(() => {
+    setupDebug("useAuth.effect", {
+      sessionPending,
+      userId: user?.id ?? null,
+      userName: user?.name ?? null,
+      userEmail: user?.email ?? null,
+    });
     if (sessionPending) {
       setProfileLoading(true);
       return;
@@ -69,13 +106,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshProfile = async () => {
     if (!user?.id) {
+      setupDebug("useAuth.refreshProfile:noUser", {});
       setProfile(null);
       return;
     }
 
+    setupDebug("useAuth.refreshProfile:start", {
+      userId: user.id,
+    });
     setProfileLoading(true);
     await fetchProfile(user.id, user.name ?? user.email ?? "User", user.image);
   };
+
+  useEffect(() => {
+    setupDebug("useAuth.profileState", {
+      loading: profileLoading,
+      profileId: profile?.id ?? null,
+      profileAvatarUrl: profile?.avatar_url ?? null,
+      profileName: profile?.name ?? null,
+    });
+  }, [profile?.avatar_url, profile?.id, profile?.name, profileLoading]);
 
   const signInWithEmail = async (email: string, password?: string) => {
     if (password) {
@@ -114,7 +164,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         session: session ?? null,
         loading,
-        setProfile,
+        setProfile: (nextProfile) => {
+          setupDebug("useAuth.setProfile", {
+            profileId: nextProfile?.id ?? null,
+            avatarUrl: nextProfile?.avatar_url ?? null,
+            name: nextProfile?.name ?? null,
+          });
+          setProfile(nextProfile);
+        },
         refreshProfile,
         signInWithEmail,
         signUpWithEmail,
