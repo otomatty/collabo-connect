@@ -7,7 +7,6 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { setupDebug } from "@/lib/setupDebug";
 import { useAuth } from "@/hooks/useAuth";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
@@ -31,47 +30,21 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   const isInitialSetup = Boolean(profile && !profile.avatar_url);
 
   useEffect(() => {
-    setupDebug("RequireAuth.state", {
-      pathname,
-      loading,
-      userId: user?.id ?? null,
-      profileId: profile?.id ?? null,
-      profileAvatarUrl: profile?.avatar_url ?? null,
-      isInitialSetup,
-    });
-  }, [isInitialSetup, loading, pathname, profile?.avatar_url, profile?.id, user?.id]);
-
-  useEffect(() => {
     if (loading) {
       return;
     }
 
     if (!user) {
-      setupDebug("RequireAuth.redirect", {
-        reason: "no-user",
-        from: pathname,
-        to: "/login",
-      });
       navigate({ to: "/login", replace: true });
       return;
     }
 
     if (isInitialSetup && pathname !== "/setup") {
-      setupDebug("RequireAuth.redirect", {
-        reason: "initial-setup",
-        from: pathname,
-        to: "/setup",
-      });
       navigate({ to: "/setup", replace: true });
       return;
     }
 
     if (!isInitialSetup && pathname === "/setup") {
-      setupDebug("RequireAuth.redirect", {
-        reason: "setup-complete",
-        from: pathname,
-        to: "/",
-      });
       navigate({ to: "/", replace: true });
     }
   }, [isInitialSetup, loading, navigate, pathname, user]);

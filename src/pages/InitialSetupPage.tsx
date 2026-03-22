@@ -16,7 +16,6 @@ import { ImageIcon } from "lucide-react";
 import { JOB_TYPES, popularTags } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { MonthYearPicker } from "@/components/MonthYearPicker";
-import { clearSetupDebug, setupDebug } from "@/lib/setupDebug";
 
 export default function InitialSetupPage() {
   const navigate = useNavigate();
@@ -31,29 +30,9 @@ export default function InitialSetupPage() {
   const [tagsInput, setTagsInput] = useState("");
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    setupDebug("InitialSetupPage.render", {
-      userId: user?.id ?? null,
-      profileId: profile?.id ?? null,
-      profileAvatarUrl: profile?.avatar_url ?? null,
-      localName: name,
-      joinedDate,
-      jobType,
-      tagsCount: tagsInput.split(/[,、]/).map((tag) => tag.trim()).filter(Boolean).length,
-      hasAvatarDataUrl: Boolean(avatarDataUrl),
-      isPending: updateProfile.isPending,
-    });
-  }, [avatarDataUrl, joinedDate, jobType, name, profile?.avatar_url, profile?.id, tagsInput, updateProfile.isPending, user?.id]);
-
   // プロフィールの初期値をセット（表示名はデフォルト空のためセットしない）
   useEffect(() => {
     if (profile) {
-      setupDebug("InitialSetupPage.profileLoaded", {
-        profileId: profile.id,
-        profileAvatarUrl: profile.avatar_url,
-        profileName: profile.name,
-        joinedDate: profile.joined_date,
-      });
       setJoinedDate(profile.joined_date || "");
       setJobType(profile.job_type || "");
       setTagsInput(profile.tags ? profile.tags.join(", ") : "");
@@ -89,11 +68,7 @@ export default function InitialSetupPage() {
 
   const handleSave = () => {
     if (!user) return;
-    clearSetupDebug();
     if (!name.trim()) {
-      setupDebug("InitialSetupPage.handleSave:validationError", {
-        reason: "name-empty",
-      });
       toast.error("表示名を入力してください");
       return;
     }
@@ -105,15 +80,6 @@ export default function InitialSetupPage() {
 
     const existingAvatarUrl = profile?.avatar_url?.trim();
     const nextAvatarUrl = avatarDataUrl ?? (existingAvatarUrl ? existingAvatarUrl : previewAvatarUrl);
-    setupDebug("InitialSetupPage.handleSave:start", {
-      userId: user.id,
-      name,
-      joinedDate,
-      jobType,
-      tags,
-      nextAvatarUrl,
-      currentProfileAvatarUrl: profile?.avatar_url ?? null,
-    });
 
     updateProfile.mutate(
       {
@@ -128,22 +94,11 @@ export default function InitialSetupPage() {
       },
       {
         onSuccess: (updatedProfile) => {
-          setupDebug("InitialSetupPage.handleSave:success", {
-            updatedProfileId: updatedProfile.id,
-            updatedAvatarUrl: updatedProfile.avatar_url,
-            updatedName: updatedProfile.name,
-          });
           setProfile(updatedProfile);
           toast.success("初期設定が完了しました！");
-          setupDebug("InitialSetupPage.handleSave:navigate", {
-            to: "/",
-          });
           navigate({ to: "/" });
         },
         onError: (error) => {
-          setupDebug("InitialSetupPage.handleSave:error", {
-            error: error instanceof Error ? error.message : String(error),
-          });
           toast.error("エラーが発生しました");
         }
       }
