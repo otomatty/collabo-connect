@@ -103,7 +103,8 @@ export default function InitialSetupPage() {
       .map((tag) => tag.trim())
       .filter((tag) => tag !== "");
 
-    const nextAvatarUrl = avatarDataUrl ?? profile?.avatar_url?.trim() ?? previewAvatarUrl;
+    const existingAvatarUrl = profile?.avatar_url?.trim();
+    const nextAvatarUrl = avatarDataUrl ?? (existingAvatarUrl ? existingAvatarUrl : previewAvatarUrl);
     setupDebug("InitialSetupPage.handleSave:start", {
       userId: user.id,
       name,
