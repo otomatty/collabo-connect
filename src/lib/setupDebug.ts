@@ -16,6 +16,10 @@ function isSetupDebugEnabled(): boolean {
   }
 
   try {
+    if (window.location.pathname === "/setup") {
+      return true;
+    }
+
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get("setupDebug") === "1") {
       return true;
@@ -43,7 +47,7 @@ export function setupDebug(scope: string, payload: SetupDebugPayload): void {
   };
 
   window.__collaboSetupDebug = [...(window.__collaboSetupDebug ?? []), entry].slice(-200);
-  console.debug(`[setup-debug] ${scope}`, payload);
+  console.log(`[setup-debug] ${scope}`, payload);
 }
 
 export function clearSetupDebug(): void {
