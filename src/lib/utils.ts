@@ -23,3 +23,22 @@ export function formatJoinedDate(value: string | null | undefined): string {
 
   return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月`;
 }
+
+export function formatJapaneseDate(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    return `${year}年${Number(month)}月${Number(day)}日`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return `${date.getUTCFullYear()}年${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
+}

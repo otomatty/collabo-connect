@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn, formatJoinedDate } from "./utils";
+import { cn, formatJapaneseDate, formatJoinedDate } from "./utils";
 
 describe("cn", () => {
   it("単一のクラス名をマージする", () => {
@@ -42,5 +42,20 @@ describe("formatJoinedDate", () => {
   it("値がない場合は空文字を返す", () => {
     expect(formatJoinedDate(null)).toBe("");
     expect(formatJoinedDate(undefined)).toBe("");
+  });
+});
+
+describe("formatJapaneseDate", () => {
+  it("ISO文字列を年月日表示に変換する", () => {
+    expect(formatJapaneseDate("2026-03-15T00:00:00.000Z")).toBe("2026年3月15日");
+  });
+
+  it("date型相当の文字列を年月日表示に変換する", () => {
+    expect(formatJapaneseDate("2026-03-15")).toBe("2026年3月15日");
+  });
+
+  it("値がない場合は空文字を返す", () => {
+    expect(formatJapaneseDate(null)).toBe("");
+    expect(formatJapaneseDate(undefined)).toBe("");
   });
 });

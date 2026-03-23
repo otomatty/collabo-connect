@@ -12,12 +12,14 @@ import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/hooks/useAuth";
 import { usePosting, useParticipate, useRemoveParticipation } from "@/hooks/usePostings";
 import { getCategoryEmoji, getCategoryLabel } from "@/lib/constants";
+import { formatJapaneseDate } from "@/lib/utils";
 
 export default function BoardDetailPage() {
   const { id } = useParams({ strict: false });
   const { user } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("board-detail");
   const { data: post, isLoading } = usePosting(id);
+  const formattedPostDate = formatJapaneseDate(post?.date);
   const participateMutation = useParticipate();
   const removeMutation = useRemoveParticipation();
   const [myAction, setMyAction] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export default function BoardDetailPage() {
         {post.date_undecided ? (
           <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> 日程未定</span>
         ) : (
-          <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {post.date}</span>
+          <span className="flex items-center gap-1"><Calendar className="h-4 w-4" /> {formattedPostDate}</span>
         )}
         <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {post.area}</span>
       </div>
