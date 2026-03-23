@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn } from "./utils";
+import { cn, formatJoinedDate } from "./utils";
 
 describe("cn", () => {
   it("単一のクラス名をマージする", () => {
@@ -23,5 +23,24 @@ describe("cn", () => {
 
   it("undefinedやnullを無視する", () => {
     expect(cn("foo", undefined, null, "bar")).toBe("foo bar");
+  });
+});
+
+describe("formatJoinedDate", () => {
+  it("ISO文字列を年月表示に変換する", () => {
+    expect(formatJoinedDate("2024-06-01T00:00:00.000Z")).toBe("2024年6月");
+  });
+
+  it("date型相当の文字列を年月表示に変換する", () => {
+    expect(formatJoinedDate("2024-06-01")).toBe("2024年6月");
+  });
+
+  it("年月文字列をそのまま年月表示に変換する", () => {
+    expect(formatJoinedDate("2024-06")).toBe("2024年6月");
+  });
+
+  it("値がない場合は空文字を返す", () => {
+    expect(formatJoinedDate(null)).toBe("");
+    expect(formatJoinedDate(undefined)).toBe("");
   });
 });

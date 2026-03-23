@@ -97,7 +97,7 @@ npm run dev
 
 1. Supabase プロジェクトを作成
 2. `supabase/schema.sql` を SQL Editor で実行（テーブル・RLS・トリガーが作成されます）
-3. 必要に応じて `supabase/seed.sql` でテスト用データを投入
+3. 必要に応じて `railway/seed.sql` または `cd api && railway run -- node scripts/run-seed.mjs` でテスト用データを投入
 
 ### 利用可能なスクリプト
 
@@ -127,8 +127,9 @@ src/
 ├── pages/            # ページコンポーネント
 ├── test/             # テストファイル
 └── types/            # 型定義（Supabase 自動生成）
-supabase/
+railway/
 ├── schema.sql        # データベーススキーマ定義
+├── better-auth-schema.sql
 └── seed.sql          # テスト用シードデータ
 ```
 

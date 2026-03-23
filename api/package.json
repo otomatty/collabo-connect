@@ -5,7 +5,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "db:schema": "node scripts/run-schema.mjs",
+    "db:seed": "node scripts/run-seed.mjs"
   },
   "dependencies": {
     "better-auth": "^1.5.5",

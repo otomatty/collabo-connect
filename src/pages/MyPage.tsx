@@ -19,6 +19,7 @@ import { useMyResponses } from "@/hooks/useAIQuestions";
 import { popularAreas, JOB_TYPES } from "@/lib/constants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { formatJoinedDate } from "@/lib/utils";
 
 export default function MyPage() {
   const { user, profile } = useAuth();
@@ -26,6 +27,7 @@ export default function MyPage() {
   const updateProfile = useUpdateProfile();
   const { data: myPostings } = useMyPostings(user?.id);
   const { data: myResponses } = useMyResponses(user?.id);
+  const joinedDateLabel = formatJoinedDate(profile?.joined_date);
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState("");
@@ -77,6 +79,10 @@ export default function MyPage() {
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
+  const profileMeta = [areas.join("・"), joinedDateLabel ? `${joinedDateLabel}入社` : ""]
+    .filter(Boolean)
+    .join(" ・ ");
+
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-6">
       <GuideModal open={showGuide} guide={guideConfigs.mypage} onDismiss={dismiss} />
@@ -96,7 +102,7 @@ export default function MyPage() {
         <div className="space-y-0.5">
           <h2 className="text-base font-semibold">{name}</h2>
           <p className="text-sm text-muted-foreground">{role}{profile?.job_type ? ` ・ ${JOB_TYPES.find((jt) => jt.value === profile.job_type)?.label ?? profile.job_type}` : ""}</p>
-          <p className="text-xs text-muted-foreground">{areas.join("・")} ・ {profile?.joined_date} 入社</p>
+          {profileMeta ? <p className="text-xs text-muted-foreground">{profileMeta}</p> : null}
         </div>
       </div>
 

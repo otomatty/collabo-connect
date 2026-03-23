@@ -8,11 +8,13 @@ import { Briefcase, MapPin, CalendarDays } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import { useProfile } from "@/hooks/useProfiles";
+import { formatJoinedDate } from "@/lib/utils";
 
 export default function MemberDetailPage() {
   const { id } = useParams({ strict: false });
   const { shouldShow: showGuide, dismiss } = useGuide("member-detail");
   const { data: user, isLoading } = useProfile(id);
+  const joinedDateLabel = formatJoinedDate(user?.joined_date);
 
   if (isLoading) {
     return (
@@ -44,9 +46,11 @@ export default function MemberDetailPage() {
             <span className="flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> {user.role}</span>
             <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {(user.areas ?? []).join("・")}</span>
           </div>
-          <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
-            <CalendarDays className="h-3 w-3" /> {user.joined_date} 入社
-          </p>
+          {joinedDateLabel ? (
+            <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+              <CalendarDays className="h-3 w-3" /> {joinedDateLabel}入社
+            </p>
+          ) : null}
         </div>
       </div>
 
