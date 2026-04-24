@@ -146,7 +146,11 @@ ON CONFLICT (profile_id, tag_id) DO NOTHING;
 -- usage_count を現状から再計算
 UPDATE public.tags t
    SET usage_count = sub.cnt
-  FROM (SELECT tag_id, count(*)::int AS cnt FROM public.profile_tags GROUP BY tag_id) sub
+  FROM (
+    SELECT tag_id, count(*)::int AS cnt
+      FROM public.profile_tags
+     GROUP BY tag_id
+  ) sub
  WHERE t.id = sub.tag_id;
 
 -- 3. postings
