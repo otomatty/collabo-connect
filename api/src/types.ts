@@ -1,17 +1,52 @@
 /** DB row types (aligned with railway/schema.sql) */
 
+export type TagCategory = "skill" | "hobby" | "area" | "role" | "other";
+
 export interface Profile {
   id: string;
   name: string;
   avatar_url: string | null;
   role: string | null;
   areas: string[] | null;
-  tags: string[] | null;
+  /** Computed via get_profile_tags(id) JOIN. Always populated by the profiles router. */
+  tags: string[];
   job_type: string;
   ai_intro: string | null;
   joined_date: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  aliases: string[];
+  category: TagCategory;
+  usage_count: number;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ProfileTag {
+  profile_id: string;
+  tag_id: string;
+  source: "manual" | "auto" | "interview" | "daily_question" | "posting";
+  created_at: string | null;
+}
+
+export interface SuggestedTag {
+  id: string;
+  user_id: string;
+  tag_id: string | null;
+  proposed_name: string | null;
+  proposed_category: TagCategory;
+  source: "interview" | "daily_question" | "posting";
+  confidence: "high" | "medium";
+  reason: string;
+  status: "pending" | "accepted" | "rejected";
+  created_at: string | null;
+  resolved_at: string | null;
 }
 
 export interface Posting {

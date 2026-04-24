@@ -2,14 +2,22 @@ import { Router, type Request, type Response } from "express";
 import { pool } from "../db.js";
 import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
+import { syncProfileTags } from "../services/tags.js";
 import type { Profile } from "../types.js";
 
 const router = Router();
 
+/**
+ * SELECT clause that attaches the computed `tags: text[]` column via the
+ * `public.get_profile_tags(id)` SQL function. API responses keep the original
+ * `tags: string[]` shape so the frontend does not need to change.
+ */
+const PROFILE_SELECT = "p.*, public.get_profile_tags(p.id) AS tags";
+
 /** GET /api/profiles - list all profiles (for members list) */
 router.get("/", async (_req: Request, res: Response): Promise<void> => {
   const r = await pool.query<Profile>(
-    "SELECT * FROM public.profiles ORDER BY name"
+    `SELECT ${PROFILE_SELECT} FROM public.profiles p ORDER BY p.name`
   );
   res.json(r.rows);
 });
@@ -18,7 +26,7 @@ router.get("/", async (_req: Request, res: Response): Promise<void> => {
 router.get("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;
   let r = await pool.query<Profile>(
-    "SELECT * FROM public.profiles WHERE id = $1",
+    `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
     [userId]
   );
   if (r.rows.length === 0) {
@@ -28,7 +36,10 @@ router.get("/me", requireAuth, async (req: Request, res: Response): Promise<void
        ON CONFLICT (id) DO NOTHING`,
       [userId]
     );
-    r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [userId]);
+    r = await pool.query<Profile>(
+      `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+      [userId]
+    );
   }
   if (r.rows.length === 0) {
     res.status(404).json({ error: "Profile not found" });
@@ -50,7 +61,10 @@ router.post("/", requireAuth, async (req: Request, res: Response): Promise<void>
      ON CONFLICT (id) DO NOTHING`,
     [userId, displayName, avatar]
   );
-  const r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [userId]);
+  const r = await pool.query<Profile>(
+    `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+    [userId]
+  );
   if (r.rows.length === 0) {
     res.status(409).json({ error: "Profile already exists or conflict" });
     return;
@@ -61,7 +75,10 @@ router.post("/", requireAuth, async (req: Request, res: Response): Promise<void>
 /** GET /api/profiles/:id - get profile by id (public) */
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [id]);
+  const r = await pool.query<Profile>(
+    `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+    [id]
+  );
   if (r.rows.length === 0) {
     res.status(404).json({ error: "Profile not found" });
     return;
@@ -77,36 +94,54 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
     if (Object.prototype.hasOwnProperty.call(body, "joined_date")) {
       body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
     }
-    const allowed = [
-      "name", "avatar_url", "role", "areas", "tags", "job_type", "ai_intro", "joined_date",
+
+    const scalarCols = [
+      "name", "avatar_url", "role", "areas", "job_type", "ai_intro", "joined_date",
     ] as const;
-    const updates: string[] = [];
-    const values: unknown[] = [];
-    let i = 1;
-    for (const key of allowed) {
-      if (key in body) {
-        updates.push(`${key} = $${i}`);
-        values.push(body[key]);
-        i++;
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let i = 1;
+      for (const key of scalarCols) {
+        if (key in body) {
+          updates.push(`${key} = $${i}`);
+          values.push(body[key]);
+          i++;
+        }
       }
-    }
-    if (updates.length === 0) {
-      const r = await pool.query<Profile>("SELECT * FROM public.profiles WHERE id = $1", [userId]);
+      if (updates.length > 0) {
+        values.push(userId);
+        await client.query(
+          `UPDATE public.profiles SET ${updates.join(", ")} WHERE id = $${i}`,
+          values
+        );
+      }
+
+      if ("tags" in body && Array.isArray(body.tags)) {
+        await syncProfileTags(client, userId, body.tags as string[]);
+      }
+
+      const r = await client.query<Profile>(
+        `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+        [userId]
+      );
       if (r.rows.length === 0) {
+        await client.query("ROLLBACK");
         res.status(404).json({ error: "Profile not found" });
         return;
       }
+      await client.query("COMMIT");
       res.json(r.rows[0]);
-      return;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-    values.push(userId);
-    const q = `UPDATE public.profiles SET ${updates.join(", ")} WHERE id = $${i} RETURNING *`;
-    const r = await pool.query<Profile>(q, values);
-    if (r.rows.length === 0) {
-      res.status(404).json({ error: "Profile not found" });
-      return;
-    }
-    res.json(r.rows[0]);
   } catch (err) {
     if (err instanceof Error && err.message.startsWith("joined_date")) {
       res.status(400).json({ error: err.message });
