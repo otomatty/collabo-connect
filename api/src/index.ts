@@ -10,6 +10,7 @@ import participantsRouter from "./routes/participants.js";
 import aiQuestionsRouter from "./routes/ai-questions.js";
 import aiQuestionResponsesRouter from "./routes/ai-question-responses.js";
 import aiInterviewRouter from "./routes/ai-interview.js";
+import tagsRouter from "./routes/tags.js";
 import cronRouter from "./routes/cron.js";
 
 const app = express();
@@ -39,6 +40,7 @@ app.use("/api/postings", postingsRouter);
 app.use("/api/ai-questions", aiQuestionsRouter);
 app.use("/api/ai-question-responses", aiQuestionResponsesRouter);
 app.use("/api/ai-interview", aiInterviewRouter);
+app.use("/api/tags", tagsRouter);
 app.use("/api/cron", cronRouter);
 
 app.listen(port, () => {

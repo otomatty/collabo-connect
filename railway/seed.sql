@@ -29,7 +29,7 @@ SET
   "updatedAt" = NOW();
 
 -- 2. app profiles
-INSERT INTO public.profiles (id, name, avatar_url, role, areas, tags, job_type, ai_intro, joined_date)
+INSERT INTO public.profiles (id, name, avatar_url, role, areas, job_type, ai_intro, joined_date)
 VALUES
   (
     '11111111-1111-4111-8111-111111111111',
@@ -37,7 +37,6 @@ VALUES
     'https://api.dicebear.com/7.x/avataaars/svg?seed=TaroTanaka',
     'フロントエンドエンジニア',
     ARRAY['新宿', '東京'],
-    ARRAY['React', 'TypeScript', '甘党', 'AWS学習中'],
     'フロントエンドエンジニア',
     'React と TypeScript を軸に UI 設計から実装まで担当しています。最近は AWS 認定に向けた学習を続けていて、技術相談や勉強会にも前向きです。',
     DATE '2024-04-01'
@@ -48,7 +47,6 @@ VALUES
     'https://api.dicebear.com/7.x/avataaars/svg?seed=HanakoSato',
     'バックエンドエンジニア',
     ARRAY['渋谷', '世田谷'],
-    ARRAY['Java', 'Spring', 'ラーメン好き', '読書家'],
     'バックエンドエンジニア',
     'Java と Spring を使った API 開発が得意です。レビューでは堅実さを重視しており、若手メンバーの相談役になることも多いです。',
     DATE '2023-10-01'
@@ -59,7 +57,6 @@ VALUES
     'https://api.dicebear.com/7.x/avataaars/svg?seed=IchiroSuzuki',
     'インフラエンジニア',
     ARRAY['品川', '川崎'],
-    ARRAY['AWS', 'Docker', '登山', 'コーヒー'],
     'インフラエンジニア',
     'AWS と Docker を中心に、安定運用しやすい基盤設計を進めています。休日は登山とコーヒー巡りで気分転換することが多いです。',
     DATE '2024-01-01'
@@ -70,7 +67,6 @@ VALUES
     'https://api.dicebear.com/7.x/avataaars/svg?seed=MisakiYamada',
     'フルスタックエンジニア',
     ARRAY['新宿', '中野'],
-    ARRAY['Next.js', 'Python', '猫好き', 'ヨガ'],
     'フルスタックエンジニア',
     'Next.js と Python をまたいで、素早く仮説検証する開発が得意です。社内勉強会の企画やファシリテーションにも積極的に関わっています。',
     DATE '2024-06-01'
@@ -81,7 +77,6 @@ VALUES
     'https://api.dicebear.com/7.x/avataaars/svg?seed=KentaTakahashi',
     'モバイルエンジニア',
     ARRAY['横浜', 'みなとみらい'],
-    ARRAY['Flutter', 'Swift', 'ゲーム好き', '筋トレ'],
     'モバイルエンジニア',
     'Flutter と Swift によるモバイルアプリ開発を担当しています。個人でもアプリやゲームを作っていて、実験的なアイデアを形にするのが好きです。',
     DATE '2023-08-01'
@@ -92,7 +87,6 @@ VALUES
     'https://api.dicebear.com/7.x/avataaars/svg?seed=SakuraIto',
     'QAエンジニア',
     ARRAY['渋谷', '目黒'],
-    ARRAY['テスト自動化', 'Selenium', 'カフェ巡り', '写真'],
     'QAエンジニア',
     'テスト自動化の整備と品質改善の仕組みづくりを担当しています。ユーザー視点を大切にしながら、安心して出せるリリースを支えるのが役割です。',
     DATE '2024-03-01'
@@ -103,11 +97,63 @@ SET
   avatar_url = EXCLUDED.avatar_url,
   role = EXCLUDED.role,
   areas = EXCLUDED.areas,
-  tags = EXCLUDED.tags,
   job_type = EXCLUDED.job_type,
   ai_intro = EXCLUDED.ai_intro,
   joined_date = EXCLUDED.joined_date,
   updated_at = NOW();
+
+-- 2-a. tags (辞書) と profile_tags (多対多)
+INSERT INTO public.tags (name, category) VALUES
+  ('React', 'skill'),
+  ('TypeScript', 'skill'),
+  ('AWS', 'skill'),
+  ('Java', 'skill'),
+  ('Spring', 'skill'),
+  ('Docker', 'skill'),
+  ('Next.js', 'skill'),
+  ('Python', 'skill'),
+  ('Flutter', 'skill'),
+  ('Swift', 'skill'),
+  ('テスト自動化', 'skill'),
+  ('Selenium', 'skill'),
+  ('AWS学習中', 'skill'),
+  ('甘党', 'hobby'),
+  ('ラーメン好き', 'hobby'),
+  ('読書家', 'hobby'),
+  ('登山', 'hobby'),
+  ('コーヒー', 'hobby'),
+  ('猫好き', 'hobby'),
+  ('ヨガ', 'hobby'),
+  ('ゲーム好き', 'hobby'),
+  ('筋トレ', 'hobby'),
+  ('カフェ巡り', 'hobby'),
+  ('写真', 'hobby')
+ON CONFLICT ((lower(name))) DO NOTHING;
+
+INSERT INTO public.profile_tags (profile_id, tag_id, source)
+SELECT p.profile_id, t.id, 'manual'
+FROM (VALUES
+  ('11111111-1111-4111-8111-111111111111'::uuid, ARRAY['React','TypeScript','甘党','AWS学習中']),
+  ('22222222-2222-4222-8222-222222222222'::uuid, ARRAY['Java','Spring','ラーメン好き','読書家']),
+  ('33333333-3333-4333-8333-333333333333'::uuid, ARRAY['AWS','Docker','登山','コーヒー']),
+  ('44444444-4444-4444-8444-444444444444'::uuid, ARRAY['Next.js','Python','猫好き','ヨガ']),
+  ('55555555-5555-4555-8555-555555555555'::uuid, ARRAY['Flutter','Swift','ゲーム好き','筋トレ']),
+  ('66666666-6666-4666-8666-666666666666'::uuid, ARRAY['テスト自動化','Selenium','カフェ巡り','写真'])
+) AS p(profile_id, tag_names)
+CROSS JOIN LATERAL unnest(p.tag_names) AS u(tag_name)
+JOIN public.tags t ON lower(t.name) = lower(u.tag_name)
+ON CONFLICT (profile_id, tag_id) DO NOTHING;
+
+-- usage_count を全タグについて再計算（関連が無くなったタグは 0 に戻す）
+UPDATE public.tags t
+   SET usage_count = COALESCE(sub.cnt, 0)
+  FROM (
+    SELECT t2.id, count(pt.tag_id)::int AS cnt
+      FROM public.tags t2
+      LEFT JOIN public.profile_tags pt ON pt.tag_id = t2.id
+     GROUP BY t2.id
+  ) sub
+ WHERE t.id = sub.id;
 
 -- 3. postings
 INSERT INTO public.postings (id, title, category, date, date_undecided, area, is_online, description, creator_id)
