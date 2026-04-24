@@ -128,7 +128,7 @@ INSERT INTO public.tags (name, category) VALUES
   ('筋トレ', 'hobby'),
   ('カフェ巡り', 'hobby'),
   ('写真', 'hobby')
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT ((lower(name))) DO NOTHING;
 
 INSERT INTO public.profile_tags (profile_id, tag_id, source)
 SELECT p.profile_id, t.id, 'manual'

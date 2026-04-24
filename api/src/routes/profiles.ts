@@ -103,6 +103,19 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
     try {
       await client.query("BEGIN");
 
+      // Verify the profile row exists before touching tags. Otherwise
+      // syncProfileTags would hit a FK violation on tags.created_by /
+      // profile_tags.profile_id and surface as a 500 rather than 404.
+      const exists = await client.query(
+        "SELECT 1 FROM public.profiles WHERE id = $1",
+        [userId]
+      );
+      if (exists.rowCount === 0) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+
       const updates: string[] = [];
       const values: unknown[] = [];
       let i = 1;
@@ -132,11 +145,6 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
         `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
         [userId]
       );
-      if (r.rows.length === 0) {
-        await client.query("ROLLBACK");
-        res.status(404).json({ error: "Profile not found" });
-        return;
-      }
       await client.query("COMMIT");
       res.json(r.rows[0]);
     } catch (err) {
