@@ -121,8 +121,11 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
         );
       }
 
-      if ("tags" in body && Array.isArray(body.tags)) {
-        await syncProfileTags(client, userId, body.tags as string[]);
+      if ("tags" in body) {
+        // null / undefined / non-array inputs are all treated as "clear all tags".
+        // The frontend sends `tags: null` when the user empties the field.
+        const rawTags = Array.isArray(body.tags) ? (body.tags as string[]) : [];
+        await syncProfileTags(client, userId, rawTags);
       }
 
       const r = await client.query<Profile>(

@@ -131,7 +131,7 @@ INSERT INTO public.tags (name, category) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO public.profile_tags (profile_id, tag_id, source)
-SELECT p.id, t.id, 'manual'
+SELECT p.profile_id, t.id, 'manual'
 FROM (VALUES
   ('11111111-1111-4111-8111-111111111111'::uuid, unnest(ARRAY['React','TypeScript','甘党','AWS学習中'])),
   ('22222222-2222-4222-8222-222222222222'::uuid, unnest(ARRAY['Java','Spring','ラーメン好き','読書家'])),
@@ -139,8 +139,8 @@ FROM (VALUES
   ('44444444-4444-4444-8444-444444444444'::uuid, unnest(ARRAY['Next.js','Python','猫好き','ヨガ'])),
   ('55555555-5555-4555-8555-555555555555'::uuid, unnest(ARRAY['Flutter','Swift','ゲーム好き','筋トレ'])),
   ('66666666-6666-4666-8666-666666666666'::uuid, unnest(ARRAY['テスト自動化','Selenium','カフェ巡り','写真']))
-) AS p(id, tag_name)
-JOIN public.tags t ON t.name = p.tag_name
+) AS p(profile_id, tag_name)
+JOIN public.tags t ON lower(t.name) = lower(p.tag_name)
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 -- usage_count を現状から再計算

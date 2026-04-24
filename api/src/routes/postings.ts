@@ -16,7 +16,7 @@ async function enrichPostings(postings: Posting[]): Promise<PostingWithDetails[]
   const participantUserIds = [...new Set(ppRows.rows.map((p) => p.user_id))];
   const allUserIds = [...new Set([...creatorIds, ...participantUserIds])];
   const profilesRows = await pool.query<Profile>(
-    "SELECT * FROM public.profiles WHERE id = ANY($1)",
+    "SELECT p.*, public.get_profile_tags(p.id) AS tags FROM public.profiles p WHERE p.id = ANY($1)",
     [allUserIds]
   );
   const profileMap = new Map(profilesRows.rows.map((r) => [r.id, r]));

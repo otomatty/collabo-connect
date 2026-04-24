@@ -21,8 +21,8 @@ export function normalizeTagName(raw: string): string | null {
 }
 
 /**
- * Find a tag row by exact name (case-sensitive) or by alias match (case-insensitive).
- * Alias match lets "react" resolve to the canonical "React" entry.
+ * Find a tag row by name or alias, case-insensitively.
+ * Ensures "React" / "react" / "REACT" resolve to the same canonical entry.
  */
 export async function findTagByName(
   client: PoolClient | typeof pool,
@@ -31,7 +31,7 @@ export async function findTagByName(
   const r = await client.query<Tag>(
     `SELECT *
        FROM public.tags
-      WHERE name = $1
+      WHERE lower(name) = lower($1)
          OR EXISTS (
               SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a
                WHERE lower(a) = lower($1)
@@ -44,7 +44,12 @@ export async function findTagByName(
 
 /**
  * Ensure a tag exists by name. If missing, INSERT it with the given category and creator.
- * Returns the resulting tag row. Safe to call concurrently (ON CONFLICT DO NOTHING).
+ *
+ * Uses a CTE with ON CONFLICT DO NOTHING and a fallback SELECT so that a race
+ * between two concurrent upserts never performs an unnecessary UPDATE (which
+ * would bump updated_at pointlessly) and always returns the resulting row.
+ * The uniqueness target is `(lower(name))` — see the case-insensitive unique
+ * index `tags_name_lower_unique_idx` in schema.sql.
  */
 export async function upsertTag(
   client: PoolClient | typeof pool,
@@ -54,10 +59,18 @@ export async function upsertTag(
   const existing = await findTagByName(client, name);
   if (existing) return existing;
   const r = await client.query<Tag>(
-    `INSERT INTO public.tags (name, category, created_by)
-          VALUES ($1, $2, $3)
-     ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-     RETURNING *`,
+    `WITH ins AS (
+       INSERT INTO public.tags (name, category, created_by)
+            VALUES ($1, $2, $3)
+       ON CONFLICT ((lower(name))) DO NOTHING
+       RETURNING *
+     )
+     SELECT * FROM ins
+     UNION ALL
+     SELECT * FROM public.tags
+      WHERE lower(name) = lower($1)
+        AND NOT EXISTS (SELECT 1 FROM ins)
+     LIMIT 1`,
     [name, opts.category ?? "other", opts.createdBy ?? null]
   );
   return r.rows[0];
@@ -107,12 +120,12 @@ export async function syncProfileTags(
       [userId, toDelete]
     );
   }
-  for (const tagId of toInsert) {
+  if (toInsert.length > 0) {
     await client.query(
       `INSERT INTO public.profile_tags (profile_id, tag_id, source)
-            VALUES ($1, $2, 'manual')
+            SELECT $1, unnest($2::uuid[]), 'manual'
        ON CONFLICT (profile_id, tag_id) DO NOTHING`,
-      [userId, tagId]
+      [userId, toInsert]
     );
   }
 
@@ -132,10 +145,10 @@ export async function syncProfileTags(
     );
     // Tags that no longer appear in profile_tags need usage_count = 0.
     await client.query(
-      `UPDATE public.tags
+      `UPDATE public.tags t
           SET usage_count = 0
-        WHERE id = ANY($1::uuid[])
-          AND NOT EXISTS (SELECT 1 FROM public.profile_tags pt WHERE pt.tag_id = tags.id)`,
+        WHERE t.id = ANY($1::uuid[])
+          AND NOT EXISTS (SELECT 1 FROM public.profile_tags pt WHERE pt.tag_id = t.id)`,
       [changed]
     );
   }

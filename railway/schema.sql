@@ -79,10 +79,11 @@ create table if not exists public.ai_question_responses (
 -- ============================================
 -- 6. tags (タグ辞書)
 -- ============================================
--- タグの正規化単位。name はユニーク。aliases で表記ゆれを吸収。
+-- タグの正規化単位。name は大文字小文字を区別せずユニーク（lower(name) に一意索引）。
+-- aliases で表記ゆれを吸収し、"React" / "react" / "REACT" は同一レコードへ解決される。
 create table if not exists public.tags (
   id uuid primary key default uuid_generate_v4(),
-  name text not null unique,
+  name text not null,
   aliases text[] default '{}',
   category text not null default 'other'
     check (category in ('skill', 'hobby', 'area', 'role', 'other')),
@@ -92,7 +93,10 @@ create table if not exists public.tags (
   updated_at timestamptz default now()
 );
 
-create index if not exists tags_name_idx on public.tags (lower(name));
+-- Case-insensitive uniqueness: upsertTag uses `ON CONFLICT ((lower(name)))`.
+-- 古い case-sensitive な tags_name_key 制約が残っている環境はまずそれを外す。
+alter table public.tags drop constraint if exists tags_name_key;
+create unique index if not exists tags_name_lower_unique_idx on public.tags (lower(name));
 create index if not exists tags_category_idx on public.tags (category);
 create index if not exists tags_usage_count_idx on public.tags (usage_count desc);
 
@@ -138,6 +142,8 @@ create table if not exists public.suggested_tags (
 
 create index if not exists suggested_tags_user_status_idx
   on public.suggested_tags (user_id, status);
+create index if not exists suggested_tags_tag_id_idx
+  on public.suggested_tags (tag_id) where tag_id is not null;
 
 -- ============================================
 -- Helper: プロフィールに紐づくタグ名一覧
@@ -177,8 +183,8 @@ begin
         end if;
         insert into public.tags (name, created_by, category)
         values (cleaned, rec.id, 'other')
-        on conflict (name) do nothing;
-        select id into new_tag_id from public.tags where name = cleaned;
+        on conflict ((lower(name))) do nothing;
+        select id into new_tag_id from public.tags where lower(name) = lower(cleaned);
         insert into public.profile_tags (profile_id, tag_id, source)
         values (rec.id, new_tag_id, 'manual')
         on conflict (profile_id, tag_id) do nothing;

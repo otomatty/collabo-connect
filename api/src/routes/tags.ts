@@ -12,6 +12,15 @@ function parseLimit(raw: unknown, fallback: number, max: number): number {
 }
 
 /**
+ * Escape LIKE/ILIKE metacharacters (%, _, \) in user input so they are matched
+ * literally rather than interpreted as wildcards. Used together with ESCAPE '\'
+ * in the SQL pattern.
+ */
+function escapeLikePattern(s: string): string {
+  return s.replace(/[\\%_]/g, "\\$&");
+}
+
+/**
  * GET /api/tags?q=<query>&category=<category>&limit=<n>
  * Substring search (case-insensitive) over name and aliases.
  * Results ordered by usage_count desc so popular tags surface first.
@@ -27,11 +36,11 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   const where: string[] = [];
 
   if (q !== "") {
-    params.push(`%${q}%`);
+    params.push(`%${escapeLikePattern(q)}%`);
     const p = params.length;
     where.push(
-      `(name ILIKE $${p} OR EXISTS (
-          SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a WHERE a ILIKE $${p}
+      `(name ILIKE $${p} ESCAPE '\\' OR EXISTS (
+          SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a WHERE a ILIKE $${p} ESCAPE '\\'
         ))`
     );
   }

@@ -8,17 +8,29 @@ const router = Router();
 router.get("/:postingId/participants", async (req: Request, res: Response): Promise<void> => {
   const { postingId } = req.params;
   const r = await pool.query(
-    `SELECT pp.*, row_to_json(pr) as profile
-     FROM public.posting_participants pp
-     LEFT JOIN public.profiles pr ON pp.user_id = pr.id
-     WHERE pp.posting_id = $1`,
+    `SELECT pp.*,
+            CASE
+              WHEN pr.id IS NULL THEN NULL
+              ELSE jsonb_build_object(
+                'id', pr.id,
+                'name', pr.name,
+                'avatar_url', pr.avatar_url,
+                'role', pr.role,
+                'areas', pr.areas,
+                'job_type', pr.job_type,
+                'ai_intro', pr.ai_intro,
+                'joined_date', pr.joined_date,
+                'created_at', pr.created_at,
+                'updated_at', pr.updated_at,
+                'tags', public.get_profile_tags(pr.id)
+              )
+            END AS profile
+       FROM public.posting_participants pp
+       LEFT JOIN public.profiles pr ON pp.user_id = pr.id
+      WHERE pp.posting_id = $1`,
     [postingId]
   );
-  const rows = r.rows.map((row: { profile: unknown }) => ({
-    ...row,
-    profile: row.profile,
-  }));
-  res.json(rows);
+  res.json(r.rows);
 });
 
 /** POST /api/postings/:postingId/participants - body: { action: 'join'|'interested'|'online' } */
