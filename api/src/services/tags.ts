@@ -97,11 +97,21 @@ export async function upsertTag(
 export async function syncProfileTags(
   client: PoolClient,
   userId: string,
-  rawNames: string[]
+  rawNames: unknown[]
 ): Promise<void> {
+  // Serialize concurrent PUT /api/profiles/me for the same user. Without this
+  // lock, two transactions would both read the same currentIds and produce a
+  // union (or a stale set) of profile_tags.
+  await client.query(
+    "SELECT 1 FROM public.profiles WHERE id = $1 FOR UPDATE",
+    [userId]
+  );
+
+  // Defensive: body.tags is untrusted JSON, drop non-strings before normalizing.
   const names = Array.from(
     new Set(
       rawNames
+        .filter((raw): raw is string => typeof raw === "string")
         .map(normalizeTagName)
         .filter((n): n is string => n !== null)
     )
@@ -140,6 +150,12 @@ export async function syncProfileTags(
 
   const changed = [...toDelete, ...toInsert];
   if (changed.length > 0) {
+    // Lock affected tag rows so the subsequent usage_count writes are not
+    // overwritten by a concurrent syncProfileTags touching the same tag.
+    await client.query(
+      "SELECT 1 FROM public.tags WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE",
+      [changed]
+    );
     await client.query(
       `UPDATE public.tags t
           SET usage_count = sub.cnt

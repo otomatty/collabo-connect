@@ -137,7 +137,8 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
       if ("tags" in body) {
         // null / undefined / non-array inputs are all treated as "clear all tags".
         // The frontend sends `tags: null` when the user empties the field.
-        const rawTags = Array.isArray(body.tags) ? (body.tags as string[]) : [];
+        // syncProfileTags filters out non-string elements defensively.
+        const rawTags: unknown[] = Array.isArray(body.tags) ? body.tags : [];
         await syncProfileTags(client, userId, rawTags);
       }
 

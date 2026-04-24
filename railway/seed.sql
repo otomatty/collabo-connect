@@ -140,8 +140,8 @@ FROM (VALUES
   ('55555555-5555-4555-8555-555555555555'::uuid, ARRAY['Flutter','Swift','ゲーム好き','筋トレ']),
   ('66666666-6666-4666-8666-666666666666'::uuid, ARRAY['テスト自動化','Selenium','カフェ巡り','写真'])
 ) AS p(profile_id, tag_names)
-CROSS JOIN LATERAL unnest(p.tag_names) AS tag_name
-JOIN public.tags t ON lower(t.name) = lower(tag_name)
+CROSS JOIN LATERAL unnest(p.tag_names) AS u(tag_name)
+JOIN public.tags t ON lower(t.name) = lower(u.tag_name)
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 -- usage_count を全タグについて再計算（関連が無くなったタグは 0 に戻す）
