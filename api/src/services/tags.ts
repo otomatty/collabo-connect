@@ -45,11 +45,17 @@ export async function findTagByName(
 /**
  * Ensure a tag exists by name. If missing, INSERT it with the given category and creator.
  *
- * Uses a CTE with ON CONFLICT DO NOTHING and a fallback SELECT so that a race
- * between two concurrent upserts never performs an unnecessary UPDATE (which
- * would bump updated_at pointlessly) and always returns the resulting row.
- * The uniqueness target is `(lower(name))` — see the case-insensitive unique
- * index `tags_name_lower_unique_idx` in schema.sql.
+ * Uses a CTE with ON CONFLICT DO NOTHING and a fallback SELECT to avoid
+ * bumping updated_at on conflict. The uniqueness target is `(lower(name))` —
+ * see the case-insensitive unique index `tags_name_lower_unique_idx` in
+ * schema.sql.
+ *
+ * Concurrent-insert race: under READ COMMITTED a single statement's snapshot
+ * may not yet include a row another transaction committed between our
+ * snapshot and INSERT. In that case ON CONFLICT DO NOTHING suppresses the
+ * insert and the UNION'd SELECT also misses the row. We handle that by
+ * re-running findTagByName (a fresh statement → fresh snapshot) which will
+ * see the newly committed row.
  */
 export async function upsertTag(
   client: PoolClient | typeof pool,
@@ -73,7 +79,10 @@ export async function upsertTag(
      LIMIT 1`,
     [name, opts.category ?? "other", opts.createdBy ?? null]
   );
-  return r.rows[0];
+  if (r.rows[0]) return r.rows[0];
+  const raced = await findTagByName(client, name);
+  if (raced) return raced;
+  throw new Error(`upsertTag: failed to resolve tag "${name}"`);
 }
 
 /**

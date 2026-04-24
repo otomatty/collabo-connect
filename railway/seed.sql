@@ -133,25 +133,27 @@ ON CONFLICT ((lower(name))) DO NOTHING;
 INSERT INTO public.profile_tags (profile_id, tag_id, source)
 SELECT p.profile_id, t.id, 'manual'
 FROM (VALUES
-  ('11111111-1111-4111-8111-111111111111'::uuid, unnest(ARRAY['React','TypeScript','甘党','AWS学習中'])),
-  ('22222222-2222-4222-8222-222222222222'::uuid, unnest(ARRAY['Java','Spring','ラーメン好き','読書家'])),
-  ('33333333-3333-4333-8333-333333333333'::uuid, unnest(ARRAY['AWS','Docker','登山','コーヒー'])),
-  ('44444444-4444-4444-8444-444444444444'::uuid, unnest(ARRAY['Next.js','Python','猫好き','ヨガ'])),
-  ('55555555-5555-4555-8555-555555555555'::uuid, unnest(ARRAY['Flutter','Swift','ゲーム好き','筋トレ'])),
-  ('66666666-6666-4666-8666-666666666666'::uuid, unnest(ARRAY['テスト自動化','Selenium','カフェ巡り','写真']))
-) AS p(profile_id, tag_name)
-JOIN public.tags t ON lower(t.name) = lower(p.tag_name)
+  ('11111111-1111-4111-8111-111111111111'::uuid, ARRAY['React','TypeScript','甘党','AWS学習中']),
+  ('22222222-2222-4222-8222-222222222222'::uuid, ARRAY['Java','Spring','ラーメン好き','読書家']),
+  ('33333333-3333-4333-8333-333333333333'::uuid, ARRAY['AWS','Docker','登山','コーヒー']),
+  ('44444444-4444-4444-8444-444444444444'::uuid, ARRAY['Next.js','Python','猫好き','ヨガ']),
+  ('55555555-5555-4555-8555-555555555555'::uuid, ARRAY['Flutter','Swift','ゲーム好き','筋トレ']),
+  ('66666666-6666-4666-8666-666666666666'::uuid, ARRAY['テスト自動化','Selenium','カフェ巡り','写真'])
+) AS p(profile_id, tag_names)
+CROSS JOIN LATERAL unnest(p.tag_names) AS tag_name
+JOIN public.tags t ON lower(t.name) = lower(tag_name)
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
--- usage_count を現状から再計算
+-- usage_count を全タグについて再計算（関連が無くなったタグは 0 に戻す）
 UPDATE public.tags t
-   SET usage_count = sub.cnt
+   SET usage_count = COALESCE(sub.cnt, 0)
   FROM (
-    SELECT tag_id, count(*)::int AS cnt
-      FROM public.profile_tags
-     GROUP BY tag_id
+    SELECT t2.id, count(pt.tag_id)::int AS cnt
+      FROM public.tags t2
+      LEFT JOIN public.profile_tags pt ON pt.tag_id = t2.id
+     GROUP BY t2.id
   ) sub
- WHERE t.id = sub.tag_id;
+ WHERE t.id = sub.id;
 
 -- 3. postings
 INSERT INTO public.postings (id, title, category, date, date_undecided, area, is_online, description, creator_id)

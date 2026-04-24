@@ -177,6 +177,12 @@ begin
     loop
       foreach raw_name in array rec.tags
       loop
+        -- btrim(NULL) = NULL passes through the empty-string check, so guard
+        -- both NULL and empty explicitly. Otherwise a NULL element would reach
+        -- the INSERT and violate tags.name NOT NULL, aborting the migration.
+        if raw_name is null then
+          continue;
+        end if;
         cleaned := btrim(raw_name);
         if cleaned = '' then
           continue;
