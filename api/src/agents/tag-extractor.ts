@@ -5,6 +5,9 @@ import type { Tag, TagCategory } from "../types.js";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const MAX_TURNS = 5;
+/** Per-call cap on the Gemini fetch. Without this the request can hang, which
+ *  defeats the "return [] on error" contract callers rely on. */
+const GEMINI_TIMEOUT_MS = 30_000;
 const SEARCH_TAGS_DEFAULT_LIMIT = 20;
 const SEARCH_TAGS_MAX_LIMIT = 50;
 const POPULAR_TAGS_DEFAULT_LIMIT = 10;
@@ -332,11 +335,19 @@ export async function extractTags(input: ExtractInput): Promise<ExtractedTag[]> 
           maxOutputTokens: 2048,
         },
       };
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!res.ok) {
         console.error("tag-extractor: Gemini API error:", res.status, await res.text());
         return [];
