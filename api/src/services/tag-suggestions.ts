@@ -1,7 +1,12 @@
+import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "../db.js";
 import { findTagByName, isTagCategory, normalizeTagName } from "./tags.js";
-import type { ExtractedTag } from "../agents/tag-extractor.js";
+import {
+  extractTags,
+  type ExtractedTag,
+  type ExtractInputProfile,
+} from "../agents/tag-extractor.js";
 import type { Tag } from "../types.js";
 
 export type SuggestionSource = "interview" | "daily_question" | "posting";
@@ -334,4 +339,139 @@ export async function persistSuggestions(
   }
 
   return result;
+}
+
+export interface InterviewMessage {
+  role: "ai" | "user";
+  content: string;
+}
+
+export interface ExtractAndPersistInput {
+  messages: InterviewMessage[];
+  personCard?: string | null;
+  profile: ExtractInputProfile;
+}
+
+/**
+ * Idempotency window for fire-and-forget invocations of the same interview.
+ *
+ * The frontend can resubmit the `generate` action (retry, double click, route
+ * remount) within seconds. Without dedup the agent would run twice for the
+ * same conversation. persistSuggestions already filters duplicate writes, but
+ * we'd still spend a Gemini round trip + tool calls. Cap the in-memory hash
+ * cache so a long-lived process can't grow unbounded.
+ */
+const RECENT_INTERVIEW_TTL_MS = 5 * 60 * 1000;
+const RECENT_INTERVIEW_MAX_ENTRIES = 1000;
+const recentInterviewHashes = new Map<string, number>();
+
+function pruneRecentInterviewHashes(now: number): void {
+  for (const [key, ts] of recentInterviewHashes) {
+    if (now - ts > RECENT_INTERVIEW_TTL_MS) {
+      recentInterviewHashes.delete(key);
+    }
+  }
+  if (recentInterviewHashes.size > RECENT_INTERVIEW_MAX_ENTRIES) {
+    const overflow = recentInterviewHashes.size - RECENT_INTERVIEW_MAX_ENTRIES;
+    const it = recentInterviewHashes.keys();
+    for (let i = 0; i < overflow; i++) {
+      const k = it.next().value;
+      if (k === undefined) break;
+      recentInterviewHashes.delete(k);
+    }
+  }
+}
+
+function fingerprintInterview(userId: string, conversation: string): string {
+  return createHash("sha256")
+    .update(userId)
+    .update(" ")
+    .update(conversation)
+    .digest("hex");
+}
+
+function buildInterviewConversation(
+  messages: InterviewMessage[],
+  personCard?: string | null
+): string {
+  const parts: string[] = [];
+  const trimmedCard = typeof personCard === "string" ? personCard.trim() : "";
+  if (trimmedCard) {
+    parts.push("## 人物カード");
+    parts.push(trimmedCard);
+    parts.push("");
+  }
+  if (messages.length > 0) {
+    parts.push("## インタビュー対話");
+    for (const m of messages) {
+      if (!m || typeof m.content !== "string") continue;
+      const text = m.content.trim();
+      if (!text) continue;
+      const speaker = m.role === "user" ? "ユーザー" : "インタビュアー";
+      parts.push(`${speaker}: ${text}`);
+    }
+  }
+  return parts.join("\n");
+}
+
+/**
+ * Run the tag-extractor agent on a finished AI interview and persist the
+ * results. Designed for fire-and-forget invocation from the interview route:
+ * never throws, never awaits anything the caller cares about.
+ *
+ * Idempotency: the (userId + conversation + personCard) hash is cached for a
+ * short window. A repeat call within the window is dropped before the Gemini
+ * request, which avoids the duplicate spend that persistSuggestions's row-
+ * level dedupe would otherwise paper over after the fact.
+ */
+export async function extractAndPersistTags(
+  userId: string,
+  input: ExtractAndPersistInput
+): Promise<void> {
+  if (!userId) {
+    console.warn("extractAndPersistTags: missing userId; skipping");
+    return;
+  }
+  const messages = Array.isArray(input.messages) ? input.messages : [];
+  const conversation = buildInterviewConversation(messages, input.personCard);
+  if (!conversation.trim()) {
+    return;
+  }
+
+  const key = fingerprintInterview(userId, conversation);
+  const now = Date.now();
+  pruneRecentInterviewHashes(now);
+  const seenAt = recentInterviewHashes.get(key);
+  if (seenAt !== undefined && now - seenAt <= RECENT_INTERVIEW_TTL_MS) {
+    return;
+  }
+  // Reserve the slot up front so two concurrent generate retries (e.g. a
+  // double-clicked button) don't both spawn the agent. Cleared in the
+  // failure paths below — extractTags swallows transient Gemini errors and
+  // returns [], so caching that empty result would suppress legitimate
+  // retries until the TTL expired.
+  recentInterviewHashes.set(key, now);
+
+  let committed = false;
+  try {
+    const suggestions = await extractTags({
+      conversation,
+      profile: input.profile,
+    });
+    if (suggestions.length === 0) {
+      return;
+    }
+
+    const result = await persistSuggestions(userId, "interview", suggestions);
+    committed = true;
+    console.log(
+      `extractAndPersistTags: user=${userId} applied=${result.applied} pending=${result.pending} skipped=${result.skipped}`
+    );
+  } catch (err) {
+    console.error("extractAndPersistTags: failed:", err);
+  } finally {
+    if (!committed) {
+      recentInterviewHashes.delete(key);
+    }
+  }
 }

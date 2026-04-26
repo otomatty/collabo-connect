@@ -4,6 +4,7 @@ import {
   buildInterviewSystemPrompt,
   buildGenerateSystemPrompt,
 } from "../prompts/index.js";
+import { extractAndPersistTags } from "../services/tag-suggestions.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-3-flash-preview";
@@ -184,6 +185,18 @@ personCard には今回の回答で得られた新情報を追記してくださ
       const raw = await callGemini(systemPrompt, userPrompt);
       const introduction = parseIntroduction(raw);
       res.json({ introduction });
+
+      const userId = req.userId;
+      if (userId) {
+        // Fire-and-forget: extractAndPersistTags swallows its own errors so
+        // a failure in the tag agent never blocks or breaks the interview
+        // response above.
+        void extractAndPersistTags(userId, {
+          messages,
+          personCard,
+          profile,
+        });
+      }
       return;
     }
 
