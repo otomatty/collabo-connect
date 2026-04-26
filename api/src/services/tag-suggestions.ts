@@ -67,19 +67,6 @@ async function profileAlreadyHasTag(
   return r.rows.length > 0;
 }
 
-async function pendingSuggestionExistsForTag(
-  client: PoolClient,
-  userId: string,
-  tagId: string
-): Promise<boolean> {
-  const r = await client.query(
-    `SELECT 1 FROM public.suggested_tags
-      WHERE user_id = $1 AND tag_id = $2 AND status = 'pending'`,
-    [userId, tagId]
-  );
-  return r.rows.length > 0;
-}
-
 async function pendingSuggestionExistsForName(
   client: PoolClient,
   userId: string,
@@ -121,9 +108,7 @@ async function acceptResolvedPending(
   userId: string,
   tag: Tag
 ): Promise<void> {
-  const lowerCandidates = [tag.name, ...(tag.aliases ?? [])]
-    .filter((n): n is string => typeof n === "string" && n.length > 0)
-    .map((n) => n.toLowerCase());
+  const lowerCandidates = lowerNameAndAliases(tag);
   await client.query(
     `UPDATE public.suggested_tags
         SET status = 'accepted',
@@ -137,6 +122,47 @@ async function acceptResolvedPending(
         )`,
     [userId, tag.id, lowerCandidates]
   );
+}
+
+function lowerNameAndAliases(tag: Tag): string[] {
+  return [tag.name, ...(tag.aliases ?? [])]
+    .filter((n): n is string => typeof n === "string" && n.length > 0)
+    .map((n) => n.toLowerCase());
+}
+
+/**
+ * Reuse a prior pending suggested_tags row for the same logical tag in the
+ * medium-confidence path, instead of inserting a parallel duplicate.
+ *
+ * Matches on either:
+ * - `tag_id = $tagId` (an earlier medium suggestion against the same row), or
+ * - `tag_id IS NULL AND lower(proposed_name) ∈ {canonical name, aliases...}`
+ *   (a row queued before the tag was added to the dictionary).
+ *
+ * Backfills `tag_id` on the proposed_name rows so the audit trail links to the
+ * actual tag, but leaves `status = 'pending'` so the user still reviews it.
+ *
+ * Returns true when at least one row was reused, signalling the caller to skip
+ * the INSERT.
+ */
+async function linkPendingSuggestionToTag(
+  client: PoolClient,
+  userId: string,
+  tag: Tag
+): Promise<boolean> {
+  const lowerCandidates = lowerNameAndAliases(tag);
+  const r = await client.query(
+    `UPDATE public.suggested_tags
+        SET tag_id = COALESCE(tag_id, $2)
+      WHERE user_id = $1
+        AND status = 'pending'
+        AND (
+          tag_id = $2
+          OR (tag_id IS NULL AND lower(proposed_name) = ANY($3::text[]))
+        )`,
+    [userId, tag.id, lowerCandidates]
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 /**
@@ -251,7 +277,12 @@ export async function persistSuggestions(
           result.skipped++;
           continue;
         }
-        if (await pendingSuggestionExistsForTag(client, userId, existing.id)) {
+        // Reuse a prior pending row (either same tag_id, or an older
+        // proposed_name that matches this tag's canonical name / alias) so we
+        // don't end up with two parallel pending entries for the same logical
+        // suggestion. linkPendingSuggestionToTag returns true iff a row was
+        // reused — in that case there's nothing left to insert.
+        if (await linkPendingSuggestionToTag(client, userId, existing)) {
           result.skipped++;
           continue;
         }

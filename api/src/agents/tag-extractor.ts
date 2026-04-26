@@ -198,9 +198,12 @@ async function listPopularTags(category: TagCategory, limit: number): Promise<Ta
  */
 async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   if (name === "search_tags") {
-    const query = typeof args.query === "string" ? args.query : "";
+    const rawQuery = args.query;
+    if (typeof rawQuery !== "string" || rawQuery.trim() === "") {
+      throw new Error(`search_tags: query is required (got ${JSON.stringify(rawQuery)})`);
+    }
     const limit = clampInt(args.limit, SEARCH_TAGS_DEFAULT_LIMIT, SEARCH_TAGS_MAX_LIMIT);
-    const rows = await searchTags(query, limit);
+    const rows = await searchTags(rawQuery, limit);
     return { tags: rows.map(tagToToolPayload) };
   }
   if (name === "list_popular_tags") {
@@ -213,6 +216,14 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     return { tags: rows.map(tagToToolPayload) };
   }
   if (name === "propose_new_tag") {
+    const proposedName = typeof args.name === "string" ? args.name.trim() : "";
+    const proposedReason = typeof args.reason === "string" ? args.reason.trim() : "";
+    const proposedCategory = args.category;
+    if (!proposedName || !proposedReason || !isTagCategory(proposedCategory)) {
+      throw new Error(
+        `propose_new_tag: invalid arguments ${JSON.stringify({ name: args.name, category: args.category, reason: args.reason })}`
+      );
+    }
     // Per Phase 2 design we never INSERT into tags here. The agent uses the acknowledgement
     // to decide whether to include the proposal in its final answer; persistSuggestions
     // is the only path that may write a row (into suggested_tags as proposed_name).
@@ -313,9 +324,19 @@ function normalizeExtractedTags(parsed: unknown): ExtractedTag[] {
       reason,
     };
 
+    // Tie-break on equal confidence: prefer the candidate that resolved to an
+    // existing tag id, so a later "JS" with existing_id beats an earlier "JS"
+    // without one. Otherwise we'd silently downgrade a resolvable suggestion
+    // into the proposed_name path.
     const dedupKey = name.toLowerCase();
     const prior = out.get(dedupKey);
-    if (!prior || confidenceRank(candidate.confidence) > confidenceRank(prior.confidence)) {
+    if (
+      !prior ||
+      confidenceRank(candidate.confidence) > confidenceRank(prior.confidence) ||
+      (confidenceRank(candidate.confidence) === confidenceRank(prior.confidence) &&
+        prior.existing_id === null &&
+        candidate.existing_id !== null)
+    ) {
       out.set(dedupKey, candidate);
     }
   }
