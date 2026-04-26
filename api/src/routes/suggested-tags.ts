@@ -97,10 +97,19 @@ router.post("/:id/accept", requireAuth, async (req: Request, res: Response): Pro
     if (suggestion.tag_id) {
       // Lock the existing tag row before the usage_count refresh below to
       // avoid a lost update under concurrent accepts touching the same tag.
-      await client.query(
+      // The ON DELETE CASCADE on suggested_tags.tag_id should make a missing
+      // tag impossible while we hold the suggested_tag lock, but check
+      // explicitly so a schema-constraint regression surfaces as 404 rather
+      // than a FK violation 500 on the profile_tags INSERT below.
+      const tagLock = await client.query(
         "SELECT 1 FROM public.tags WHERE id = $1 FOR UPDATE",
         [suggestion.tag_id]
       );
+      if (tagLock.rows.length === 0) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ error: "Associated tag not found" });
+        return;
+      }
       resolvedTagId = suggestion.tag_id;
     } else if (suggestion.proposed_name) {
       const tag = await upsertTag(client, suggestion.proposed_name, {
@@ -134,15 +143,11 @@ router.post("/:id/accept", requireAuth, async (req: Request, res: Response): Pro
     );
 
     await client.query(
-      `UPDATE public.tags t
-          SET usage_count = sub.cnt
-         FROM (
-           SELECT tag_id, count(*)::int AS cnt
-             FROM public.profile_tags
-            WHERE tag_id = $1
-            GROUP BY tag_id
-         ) sub
-        WHERE t.id = sub.tag_id`,
+      `UPDATE public.tags
+          SET usage_count = (
+            SELECT count(*)::int FROM public.profile_tags WHERE tag_id = $1
+          )
+        WHERE id = $1`,
       [resolvedTagId]
     );
 
