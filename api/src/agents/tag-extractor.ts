@@ -189,6 +189,13 @@ async function listPopularTags(category: TagCategory, limit: number): Promise<Ta
   return r.rows;
 }
 
+/**
+ * Validation errors throw rather than returning `{ error: ... }`. The caller's
+ * catch propagates the failure into the outer `return []`, keeping the
+ * "errors → []" contract: a malformed tool call means the agent is operating
+ * outside its declared API and we don't trust whatever final answer it would
+ * still emit afterward.
+ */
 async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   if (name === "search_tags") {
     const query = typeof args.query === "string" ? args.query : "";
@@ -199,7 +206,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
   if (name === "list_popular_tags") {
     const rawCategory = args.category;
     if (!isTagCategory(rawCategory) || rawCategory === "other") {
-      return { error: "category must be one of skill / hobby / area / role" };
+      throw new Error(`list_popular_tags: invalid category ${JSON.stringify(rawCategory)}`);
     }
     const limit = clampInt(args.limit, POPULAR_TAGS_DEFAULT_LIMIT, POPULAR_TAGS_MAX_LIMIT);
     const rows = await listPopularTags(rawCategory, limit);
@@ -211,7 +218,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     // is the only path that may write a row (into suggested_tags as proposed_name).
     return { accepted: true };
   }
-  return { error: `unknown function: ${name}` };
+  throw new Error(`unknown function: ${name}`);
 }
 
 function buildUserPrompt(input: ExtractInput): string {

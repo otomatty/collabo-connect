@@ -253,8 +253,8 @@ export async function persistSuggestions(
         await client.query(
           `INSERT INTO public.suggested_tags
               (user_id, tag_id, proposed_category, source, confidence, reason, status)
-           VALUES ($1, $2, $3, $4, 'medium', $5, 'pending')`,
-          [userId, existing.id, queued.category, source, queued.reason]
+           VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+          [userId, existing.id, queued.category, source, queued.confidence, queued.reason]
         );
         result.pending++;
         continue;
@@ -267,8 +267,8 @@ export async function persistSuggestions(
       await client.query(
         `INSERT INTO public.suggested_tags
             (user_id, tag_id, proposed_name, proposed_category, source, confidence, reason, status)
-         VALUES ($1, NULL, $2, $3, $4, 'medium', $5, 'pending')`,
-        [userId, queued.name, queued.category, source, queued.reason]
+         VALUES ($1, NULL, $2, $3, $4, $5, $6, 'pending')`,
+        [userId, queued.name, queued.category, source, queued.confidence, queued.reason]
       );
       result.pending++;
     }
