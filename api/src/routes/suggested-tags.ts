@@ -116,6 +116,14 @@ router.post("/:id/accept", requireAuth, async (req: Request, res: Response): Pro
         category: suggestion.proposed_category,
         createdBy: userId,
       });
+      // upsertTag's existing-tag path goes through findTagByName, which takes
+      // no row lock. Lock the tag here for the same reason the tag_id branch
+      // does — otherwise the usage_count refresh below can lose updates
+      // under a concurrent accept / syncProfileTags touching this tag.
+      await client.query(
+        "SELECT 1 FROM public.tags WHERE id = $1 FOR UPDATE",
+        [tag.id]
+      );
       resolvedTagId = tag.id;
     } else {
       // Schema CHECK guarantees one of tag_id / proposed_name is set, so this
