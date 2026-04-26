@@ -428,26 +428,32 @@ export async function extractAndPersistTags(
   userId: string,
   input: ExtractAndPersistInput
 ): Promise<void> {
+  if (!userId) {
+    console.warn("extractAndPersistTags: missing userId; skipping");
+    return;
+  }
+  const messages = Array.isArray(input.messages) ? input.messages : [];
+  const conversation = buildInterviewConversation(messages, input.personCard);
+  if (!conversation.trim()) {
+    return;
+  }
+
+  const key = fingerprintInterview(userId, conversation);
+  const now = Date.now();
+  pruneRecentInterviewHashes(now);
+  const seenAt = recentInterviewHashes.get(key);
+  if (seenAt !== undefined && now - seenAt <= RECENT_INTERVIEW_TTL_MS) {
+    return;
+  }
+  // Reserve the slot up front so two concurrent generate retries (e.g. a
+  // double-clicked button) don't both spawn the agent. Cleared in the
+  // failure paths below — extractTags swallows transient Gemini errors and
+  // returns [], so caching that empty result would suppress legitimate
+  // retries until the TTL expired.
+  recentInterviewHashes.set(key, now);
+
+  let committed = false;
   try {
-    if (!userId) {
-      console.warn("extractAndPersistTags: missing userId; skipping");
-      return;
-    }
-    const messages = Array.isArray(input.messages) ? input.messages : [];
-    const conversation = buildInterviewConversation(messages, input.personCard);
-    if (!conversation.trim()) {
-      return;
-    }
-
-    const key = fingerprintInterview(userId, conversation);
-    const now = Date.now();
-    pruneRecentInterviewHashes(now);
-    const seenAt = recentInterviewHashes.get(key);
-    if (seenAt !== undefined && now - seenAt <= RECENT_INTERVIEW_TTL_MS) {
-      return;
-    }
-    recentInterviewHashes.set(key, now);
-
     const suggestions = await extractTags({
       conversation,
       profile: input.profile,
@@ -457,10 +463,15 @@ export async function extractAndPersistTags(
     }
 
     const result = await persistSuggestions(userId, "interview", suggestions);
+    committed = true;
     console.log(
       `extractAndPersistTags: user=${userId} applied=${result.applied} pending=${result.pending} skipped=${result.skipped}`
     );
   } catch (err) {
     console.error("extractAndPersistTags: failed:", err);
+  } finally {
+    if (!committed) {
+      recentInterviewHashes.delete(key);
+    }
   }
 }
