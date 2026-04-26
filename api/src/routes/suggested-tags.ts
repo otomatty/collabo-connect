@@ -14,6 +14,19 @@ function isStatus(v: unknown): v is SuggestedTagStatus {
   return typeof v === "string" && (ALLOWED_STATUSES as readonly string[]).includes(v);
 }
 
+/** Mirror of tags.ts's parseLimit: clamp to [1, max], fall back when invalid. */
+function parseLimit(raw: unknown, fallback: number, max: number): number {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(n, max);
+}
+
+function parseOffset(raw: unknown): number {
+  const n = Number.parseInt(String(raw ?? ""), 10);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return n;
+}
+
 /**
  * Same shape as suggested_tags.id (Postgres uuid_generate_v4). Validating up
  * front avoids surfacing `invalid input syntax for type uuid` from the SELECT
@@ -59,14 +72,20 @@ async function lookupPendingSuggestionForUser(
 }
 
 /**
- * GET /api/suggested-tags?status=pending
+ * GET /api/suggested-tags?status=pending&limit=50&offset=0
  * Defaults to status=pending when omitted. The joined `tag` column is null for
  * proposed_name-only suggestions (the tag row doesn't exist yet).
+ *
+ * Bounded with a default limit of 50 (cap 100) so a heavy user with hundreds
+ * of historical suggestions does not return an unpaginated payload — the
+ * limit / offset shape mirrors the existing tags.ts list endpoint.
  */
 router.get("/", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;
   const statusRaw = req.query.status;
   const status: SuggestedTagStatus = isStatus(statusRaw) ? statusRaw : "pending";
+  const limit = parseLimit(req.query.limit, 50, 100);
+  const offset = parseOffset(req.query.offset);
 
   const r = await pool.query<SuggestedTagWithTag>(
     `SELECT s.*, to_jsonb(t.*) AS tag
@@ -74,8 +93,9 @@ router.get("/", requireAuth, async (req: Request, res: Response): Promise<void> 
   LEFT JOIN public.tags t ON t.id = s.tag_id
       WHERE s.user_id = $1
         AND s.status = $2
-   ORDER BY s.created_at DESC`,
-    [userId, status]
+   ORDER BY s.created_at DESC
+      LIMIT $3 OFFSET $4`,
+    [userId, status, limit, offset]
   );
   res.json(r.rows);
 });
