@@ -274,13 +274,20 @@ function parseJsonFromText(text: string): unknown {
   return null;
 }
 
+function confidenceRank(c: "high" | "medium"): number {
+  return c === "high" ? 2 : 1;
+}
+
 function normalizeExtractedTags(parsed: unknown): ExtractedTag[] {
   if (!parsed || typeof parsed !== "object") return [];
   const raw = (parsed as { tags?: unknown }).tags;
   if (!Array.isArray(raw)) return [];
 
-  const out: ExtractedTag[] = [];
-  const seenNames = new Set<string>();
+  // Map keyed by lower(name) so we deduplicate but keep the highest-confidence
+  // variant. The naive "drop later duplicates" approach makes auto-apply vs
+  // pending depend on the order Gemini happens to emit entries — a `medium`
+  // followed by `high` would wrongly downgrade the same tag.
+  const out = new Map<string, ExtractedTag>();
 
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
@@ -288,9 +295,6 @@ function normalizeExtractedTags(parsed: unknown): ExtractedTag[] {
 
     const name = typeof e.name === "string" ? e.name.trim() : "";
     if (!name) continue;
-
-    const dedupKey = name.toLowerCase();
-    if (seenNames.has(dedupKey)) continue;
 
     const confidence = e.confidence;
     if (confidence !== "high" && confidence !== "medium") continue;
@@ -300,17 +304,22 @@ function normalizeExtractedTags(parsed: unknown): ExtractedTag[] {
     const sourceQuote = typeof e.source_quote === "string" ? e.source_quote : "";
     const reason = typeof e.reason === "string" ? e.reason : "";
 
-    seenNames.add(dedupKey);
-    out.push({
+    const candidate: ExtractedTag = {
       name,
       existing_id: existingId,
       confidence,
       source_quote: sourceQuote,
       category,
       reason,
-    });
+    };
+
+    const dedupKey = name.toLowerCase();
+    const prior = out.get(dedupKey);
+    if (!prior || confidenceRank(candidate.confidence) > confidenceRank(prior.confidence)) {
+      out.set(dedupKey, candidate);
+    }
   }
-  return out;
+  return Array.from(out.values());
 }
 
 /**

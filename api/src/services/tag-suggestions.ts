@@ -106,9 +106,12 @@ interface ResolvedSuggestion {
  *
  * Resolves entries reachable two ways:
  * 1. `tag_id = $tagId` — typical "medium pending against the same row".
- * 2. `tag_id IS NULL AND lower(proposed_name) = lower($tagName)` — older
- *    proposed_name rows that pre-date the tag's creation in the dictionary.
- *    Backfills `tag_id` on those rows so historical audit links still resolve.
+ * 2. `tag_id IS NULL AND lower(proposed_name) ∈ {canonical name, aliases...}`
+ *    — older proposed_name rows that pre-date the tag's creation in the
+ *    dictionary. We match against the canonical name *and* aliases so a
+ *    pending row stored under "JavaScript" still resolves when the model
+ *    extracts the same tag via the "JS" alias. Backfills `tag_id` on those
+ *    rows so historical audit links still resolve.
  *
  * Called on every path that applies or skips an existing tag, so the approval
  * UI never keeps showing a pending row for a tag the user already has.
@@ -116,9 +119,11 @@ interface ResolvedSuggestion {
 async function acceptResolvedPending(
   client: PoolClient,
   userId: string,
-  tagId: string,
-  tagName: string
+  tag: Tag
 ): Promise<void> {
+  const lowerCandidates = [tag.name, ...(tag.aliases ?? [])]
+    .filter((n): n is string => typeof n === "string" && n.length > 0)
+    .map((n) => n.toLowerCase());
   await client.query(
     `UPDATE public.suggested_tags
         SET status = 'accepted',
@@ -128,9 +133,9 @@ async function acceptResolvedPending(
         AND status = 'pending'
         AND (
           tag_id = $2
-          OR (tag_id IS NULL AND lower(proposed_name) = lower($3))
+          OR (tag_id IS NULL AND lower(proposed_name) = ANY($3::text[]))
         )`,
-    [userId, tagId, tagName]
+    [userId, tag.id, lowerCandidates]
   );
 }
 
@@ -213,7 +218,7 @@ export async function persistSuggestions(
     for (const { cleaned, existing } of resolved) {
       if (cleaned.confidence === "high" && existing) {
         if (await profileAlreadyHasTag(client, userId, existing.id)) {
-          await acceptResolvedPending(client, userId, existing.id, cleaned.name);
+          await acceptResolvedPending(client, userId, existing);
           result.skipped++;
           continue;
         }
@@ -227,7 +232,7 @@ export async function persistSuggestions(
           result.skipped++;
           continue;
         }
-        await acceptResolvedPending(client, userId, existing.id, cleaned.name);
+        await acceptResolvedPending(client, userId, existing);
         appliedTagIds.add(existing.id);
         result.applied++;
         continue;
@@ -242,7 +247,7 @@ export async function persistSuggestions(
 
       if (existing) {
         if (await profileAlreadyHasTag(client, userId, existing.id)) {
-          await acceptResolvedPending(client, userId, existing.id, cleaned.name);
+          await acceptResolvedPending(client, userId, existing);
           result.skipped++;
           continue;
         }
