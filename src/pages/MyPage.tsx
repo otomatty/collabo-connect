@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
@@ -52,7 +52,10 @@ export default function MyPage() {
   const [aiIntro, setAiIntro] = useState("");
 
   const pendingCount = suggestedTags?.length ?? 0;
-  const newTagNames = (() => {
+  // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
+  // 同じ文字列。`tagDetails[].name` も同じ tags.name 由来なので、prefix の
+  // 加工なしで一致する。useMemo で再計算を抑制。
+  const newTagNames = useMemo(() => {
     if (!tagDetails) return new Set<string>();
     const cutoff = Date.now() - NEW_TAG_WINDOW_MS;
     const names = new Set<string>();
@@ -65,7 +68,7 @@ export default function MyPage() {
       }
     }
     return names;
-  })();
+  }, [tagDetails]);
 
   // プロフィールデータをフォームに反映
   useEffect(() => {

@@ -2,6 +2,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/hooks/useAuth";
 import {
   useAcceptSuggestedTag,
   useRejectSuggestedTag,
@@ -23,7 +24,7 @@ const CATEGORY_LABELS: Record<TagCategory, string> = {
   other: "その他",
 };
 
-/** Display name for a suggestion: prefer canonical tag, fall back to proposed_name. */
+/** 候補の表示名: 既存タグ参照があればその名前、無ければ proposed_name にフォールバック。 */
 function suggestionLabel(s: SuggestedTagWithTag): string {
   return s.tag?.name ?? s.proposed_name ?? "(名称未設定)";
 }
@@ -32,24 +33,83 @@ function suggestionCategory(s: SuggestedTagWithTag): TagCategory {
   return s.tag?.category ?? s.proposed_category;
 }
 
-export default function SuggestedTagsSheet({ open, onOpenChange }: SuggestedTagsSheetProps) {
-  const { data: suggestions, isLoading } = useSuggestedTags();
+/**
+ * 1 件分の候補を描画する子コンポーネント。
+ *
+ * 各行で `useAcceptSuggestedTag` / `useRejectSuggestedTag` を独立に呼ぶことで、
+ * 連続クリック時に他の行のボタン状態を巻き込まないようにしている
+ * （単一の mutation インスタンスを共有すると `variables` が後勝ちで上書きされ、
+ *  進行中の行のボタンが誤って再度活性化されてしまう）。
+ */
+function SuggestionItem({
+  suggestion,
+  onMutated,
+}: {
+  suggestion: SuggestedTagWithTag;
+  onMutated: () => void;
+}) {
   const acceptMutation = useAcceptSuggestedTag();
   const rejectMutation = useRejectSuggestedTag();
+  const isPending = acceptMutation.isPending || rejectMutation.isPending;
+  const label = suggestionLabel(suggestion);
 
-  const handleAccept = (s: SuggestedTagWithTag) => {
-    acceptMutation.mutate(s.id, {
-      onSuccess: () => toast.success(`「${suggestionLabel(s)}」を追加しました`),
+  const handleAccept = () => {
+    acceptMutation.mutate(suggestion.id, {
+      onSuccess: () => {
+        toast.success(`「${label}」を追加しました`);
+        onMutated();
+      },
       onError: (err) => toast.error(err.message || "追加に失敗しました"),
     });
   };
 
-  const handleReject = (s: SuggestedTagWithTag) => {
-    rejectMutation.mutate(s.id, {
-      onSuccess: () => toast.success(`「${suggestionLabel(s)}」を却下しました`),
+  const handleReject = () => {
+    rejectMutation.mutate(suggestion.id, {
+      onSuccess: () => {
+        toast.success(`「${label}」を却下しました`);
+        onMutated();
+      },
       onError: (err) => toast.error(err.message || "却下に失敗しました"),
     });
   };
+
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm font-medium break-all">{label}</span>
+          <Badge variant="outline" className="text-[10px] font-normal">
+            {CATEGORY_LABELS[suggestionCategory(suggestion)]}
+          </Badge>
+        </div>
+      </div>
+      {suggestion.reason ? (
+        <p className="text-xs text-muted-foreground leading-relaxed">{suggestion.reason}</p>
+      ) : null}
+      <div className="flex gap-2 pt-1">
+        <Button size="sm" onClick={handleAccept} disabled={isPending} className="flex-1">
+          追加
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleReject}
+          disabled={isPending}
+          className="flex-1"
+        >
+          却下
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export default function SuggestedTagsSheet({ open, onOpenChange }: SuggestedTagsSheetProps) {
+  const { data: suggestions, isLoading, isError } = useSuggestedTags();
+  // useAuth().profile は React Query の外でローカル state 管理されているため、
+  // ['profiles'] の invalidate だけでは MyPage 上の `tags` が更新されない。
+  // mutation 成功時に明示的に refreshProfile を呼んで自己整合させる。
+  const { refreshProfile } = useAuth();
 
   const items = suggestions ?? [];
 
@@ -71,57 +131,24 @@ export default function SuggestedTagsSheet({ open, onOpenChange }: SuggestedTags
             <p className="text-sm text-muted-foreground py-6 text-center">
               読み込み中...
             </p>
+          ) : isError ? (
+            <p className="text-sm text-destructive py-6 text-center">
+              候補タグの取得に失敗しました。時間をおいて再度お試しください。
+            </p>
           ) : items.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
               現在、候補のタグはありません。
             </p>
           ) : (
-            items.map((s) => {
-              const isPending =
-                (acceptMutation.isPending && acceptMutation.variables === s.id) ||
-                (rejectMutation.isPending && rejectMutation.variables === s.id);
-              return (
-                <div
-                  key={s.id}
-                  className="rounded-lg border border-border p-3 space-y-2"
-                >
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-medium break-all">
-                        {suggestionLabel(s)}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-normal">
-                        {CATEGORY_LABELS[suggestionCategory(s)]}
-                      </Badge>
-                    </div>
-                  </div>
-                  {s.reason ? (
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {s.reason}
-                    </p>
-                  ) : null}
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      onClick={() => handleAccept(s)}
-                      disabled={isPending}
-                      className="flex-1"
-                    >
-                      追加
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleReject(s)}
-                      disabled={isPending}
-                      className="flex-1"
-                    >
-                      却下
-                    </Button>
-                  </div>
-                </div>
-              );
-            })
+            items.map((s) => (
+              <SuggestionItem
+                key={s.id}
+                suggestion={s}
+                onMutated={() => {
+                  void refreshProfile();
+                }}
+              />
+            ))
           )}
         </div>
       </SheetContent>
