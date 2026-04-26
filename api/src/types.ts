@@ -35,6 +35,20 @@ export interface ProfileTag {
   created_at: string | null;
 }
 
+/**
+ * Row returned by GET /api/profiles/me/tags. Joins profile_tags with tags so
+ * the client gets canonical tag identity plus the per-assignment metadata
+ * (source + created_at) that the MyPage NEW-badge UI needs.
+ */
+export interface ProfileTagDetail {
+  tag_id: string;
+  name: string;
+  category: TagCategory;
+  aliases: string[];
+  source: "manual" | "auto" | "interview" | "daily_question" | "posting";
+  created_at: string | null;
+}
+
 export interface SuggestedTag {
   id: string;
   user_id: string;
