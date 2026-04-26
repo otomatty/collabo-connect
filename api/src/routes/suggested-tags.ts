@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import type { PoolClient } from "pg";
 import { pool } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { upsertTag } from "../services/tags.js";
@@ -13,9 +14,48 @@ function isStatus(v: unknown): v is SuggestedTagStatus {
   return typeof v === "string" && (ALLOWED_STATUSES as readonly string[]).includes(v);
 }
 
+/**
+ * Same shape as suggested_tags.id (Postgres uuid_generate_v4). Validating up
+ * front avoids surfacing `invalid input syntax for type uuid` from the SELECT
+ * FOR UPDATE below as a generic 500 to the client.
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Row shape returned by the listing endpoint: suggested_tag plus the joined canonical tag (if any). */
 interface SuggestedTagWithTag extends SuggestedTag {
   tag: Tag | null;
+}
+
+type LookupResult =
+  | { ok: true; suggestion: SuggestedTag }
+  | { ok: false; status: 404 | 403 | 409; message: string };
+
+/**
+ * Lock a suggested_tag by id and verify it (a) exists, (b) belongs to the
+ * caller, and (c) is still pending. Shared by accept and reject so the
+ * 404 / 403 / 409 contract stays in lockstep across both handlers. The caller
+ * is still responsible for transaction control (BEGIN / ROLLBACK / COMMIT).
+ */
+async function lookupPendingSuggestionForUser(
+  client: PoolClient,
+  id: string,
+  userId: string
+): Promise<LookupResult> {
+  const r = await client.query<SuggestedTag>(
+    "SELECT * FROM public.suggested_tags WHERE id = $1 FOR UPDATE",
+    [id]
+  );
+  if (r.rows.length === 0) {
+    return { ok: false, status: 404, message: "Suggested tag not found" };
+  }
+  const suggestion = r.rows[0];
+  if (suggestion.user_id !== userId) {
+    return { ok: false, status: 403, message: "Not allowed to operate on this suggested tag" };
+  }
+  if (suggestion.status !== "pending") {
+    return { ok: false, status: 409, message: "Suggested tag is not pending" };
+  }
+  return { ok: true, suggestion };
 }
 
 /**
@@ -59,6 +99,10 @@ router.get("/", requireAuth, async (req: Request, res: Response): Promise<void> 
 router.post("/:id/accept", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;
   const { id } = req.params;
+  if (!UUID_REGEX.test(id)) {
+    res.status(400).json({ error: "Invalid suggested tag id" });
+    return;
+  }
 
   const client = await pool.connect();
   try {
@@ -72,26 +116,13 @@ router.post("/:id/accept", requireAuth, async (req: Request, res: Response): Pro
       [userId]
     );
 
-    const lookup = await client.query<SuggestedTag>(
-      "SELECT * FROM public.suggested_tags WHERE id = $1 FOR UPDATE",
-      [id]
-    );
-    if (lookup.rows.length === 0) {
+    const lookup = await lookupPendingSuggestionForUser(client, id, userId);
+    if (!lookup.ok) {
       await client.query("ROLLBACK");
-      res.status(404).json({ error: "Suggested tag not found" });
+      res.status(lookup.status).json({ error: lookup.message });
       return;
     }
-    const suggestion = lookup.rows[0];
-    if (suggestion.user_id !== userId) {
-      await client.query("ROLLBACK");
-      res.status(403).json({ error: "Not allowed to operate on this suggested tag" });
-      return;
-    }
-    if (suggestion.status !== "pending") {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Suggested tag is not pending" });
-      return;
-    }
+    const { suggestion } = lookup;
 
     let resolvedTagId: string;
     if (suggestion.tag_id) {
@@ -179,29 +210,19 @@ router.post("/:id/accept", requireAuth, async (req: Request, res: Response): Pro
 router.post("/:id/reject", requireAuth, async (req: Request, res: Response): Promise<void> => {
   const userId = req.userId!;
   const { id } = req.params;
+  if (!UUID_REGEX.test(id)) {
+    res.status(400).json({ error: "Invalid suggested tag id" });
+    return;
+  }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    const lookup = await client.query<SuggestedTag>(
-      "SELECT * FROM public.suggested_tags WHERE id = $1 FOR UPDATE",
-      [id]
-    );
-    if (lookup.rows.length === 0) {
+    const lookup = await lookupPendingSuggestionForUser(client, id, userId);
+    if (!lookup.ok) {
       await client.query("ROLLBACK");
-      res.status(404).json({ error: "Suggested tag not found" });
-      return;
-    }
-    const suggestion = lookup.rows[0];
-    if (suggestion.user_id !== userId) {
-      await client.query("ROLLBACK");
-      res.status(403).json({ error: "Not allowed to operate on this suggested tag" });
-      return;
-    }
-    if (suggestion.status !== "pending") {
-      await client.query("ROLLBACK");
-      res.status(409).json({ error: "Suggested tag is not pending" });
+      res.status(lookup.status).json({ error: lookup.message });
       return;
     }
 
