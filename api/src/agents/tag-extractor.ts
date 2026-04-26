@@ -376,14 +376,18 @@ export async function extractTags(input: ExtractInput): Promise<ExtractedTag[]> 
       const responseParts: GeminiPart[] = [];
       for (const part of functionCalls) {
         const { name, args } = part.functionCall;
-        let result: unknown;
+        // Fail closed on tool errors: handing the model `{ error: ... }` lets it
+        // still emit a final answer based on a partially-failed view of the tag
+        // dictionary, which violates the "errors → []" contract callers rely on.
         try {
-          result = await executeTool(name, args ?? {});
+          const result = await executeTool(name, args ?? {});
+          responseParts.push({
+            functionResponse: { name, response: result as Record<string, unknown> },
+          });
         } catch (err) {
           console.error(`tag-extractor: tool ${name} failed:`, err);
-          result = { error: (err as Error).message };
+          return [];
         }
-        responseParts.push({ functionResponse: { name, response: result as Record<string, unknown> } });
       }
       contents.push({ role: "user", parts: responseParts });
     }

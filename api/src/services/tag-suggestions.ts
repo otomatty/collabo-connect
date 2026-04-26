@@ -102,11 +102,45 @@ interface ResolvedSuggestion {
 }
 
 /**
+ * Mark stale pending suggestions for this (user, tag) as accepted.
+ *
+ * Resolves entries reachable two ways:
+ * 1. `tag_id = $tagId` — typical "medium pending against the same row".
+ * 2. `tag_id IS NULL AND lower(proposed_name) = lower($tagName)` — older
+ *    proposed_name rows that pre-date the tag's creation in the dictionary.
+ *    Backfills `tag_id` on those rows so historical audit links still resolve.
+ *
+ * Called on every path that applies or skips an existing tag, so the approval
+ * UI never keeps showing a pending row for a tag the user already has.
+ */
+async function acceptResolvedPending(
+  client: PoolClient,
+  userId: string,
+  tagId: string,
+  tagName: string
+): Promise<void> {
+  await client.query(
+    `UPDATE public.suggested_tags
+        SET status = 'accepted',
+            resolved_at = now(),
+            tag_id = COALESCE(tag_id, $2)
+      WHERE user_id = $1
+        AND status = 'pending'
+        AND (
+          tag_id = $2
+          OR (tag_id IS NULL AND lower(proposed_name) = lower($3))
+        )`,
+    [userId, tagId, tagName]
+  );
+}
+
+/**
  * Persist tag-extractor results for a user.
  *
  * - confidence "high" + tag exists → INSERT into profile_tags with source='auto',
- *   then mark any pre-existing pending suggested_tags rows for that tag as
- *   accepted so the approval UI doesn't show stale entries.
+ *   then resolve any pre-existing pending suggested_tags rows for that tag —
+ *   reachable both by tag_id and by an older proposed_name match — so the
+ *   approval UI doesn't show stale entries.
  * - confidence "high" + tag does not exist → downgrade to medium pending review
  *   (we never auto-apply a tag that has no row yet, since profile_tags requires
  *   a real tags.id).
@@ -179,6 +213,7 @@ export async function persistSuggestions(
     for (const { cleaned, existing } of resolved) {
       if (cleaned.confidence === "high" && existing) {
         if (await profileAlreadyHasTag(client, userId, existing.id)) {
+          await acceptResolvedPending(client, userId, existing.id, cleaned.name);
           result.skipped++;
           continue;
         }
@@ -192,17 +227,7 @@ export async function persistSuggestions(
           result.skipped++;
           continue;
         }
-        // Resolve any prior pending suggestions for the same tag — the user
-        // has the tag now, so leaving them visible in the approval UI is just
-        // noise.
-        await client.query(
-          `UPDATE public.suggested_tags
-              SET status = 'accepted', resolved_at = now()
-            WHERE user_id = $1
-              AND tag_id = $2
-              AND status = 'pending'`,
-          [userId, existing.id]
-        );
+        await acceptResolvedPending(client, userId, existing.id, cleaned.name);
         appliedTagIds.add(existing.id);
         result.applied++;
         continue;
@@ -217,6 +242,7 @@ export async function persistSuggestions(
 
       if (existing) {
         if (await profileAlreadyHasTag(client, userId, existing.id)) {
+          await acceptResolvedPending(client, userId, existing.id, cleaned.name);
           result.skipped++;
           continue;
         }
