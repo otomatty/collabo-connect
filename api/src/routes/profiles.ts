@@ -247,12 +247,20 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
         }
       }
       if (parsedTopics !== undefined) {
+        // Bump `conversation_topics_updated_at` only when the value actually
+        // changes, so a no-op PUT does not invalidate the topics-specific
+        // freshness signal. PG evaluates both RHS expressions against the row
+        // BEFORE any SET assignments take effect, so the CASE compares the OLD
+        // column value against the new param.
         updates.push(`conversation_topics = $${i}::jsonb`);
+        updates.push(
+          `conversation_topics_updated_at = CASE
+             WHEN conversation_topics IS DISTINCT FROM $${i}::jsonb THEN now()
+             ELSE conversation_topics_updated_at
+           END`
+        );
         values.push(JSON.stringify(parsedTopics));
         i++;
-        // Stamp the topics-specific update time so the UI can detect "stale"
-        // topics independently of generic profile edits (which bump updated_at).
-        updates.push(`conversation_topics_updated_at = now()`);
       }
       if (updates.length > 0) {
         values.push(userId);
