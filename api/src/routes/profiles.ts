@@ -6,13 +6,16 @@ import { syncProfileTags } from "../services/tags.js";
 import type { ConversationTopic, Profile, ProfileTagDetail } from "../types.js";
 
 const CONVERSATION_TOPICS_MAX = 5;
+const TOPIC_EMOJI_MAX = 16;
+const TOPIC_TITLE_MAX = 100;
+const TOPIC_DESCRIPTION_MAX = 500;
 
 /**
  * Validate `conversation_topics` payload coming from PUT /api/profiles/me.
  *
- * Returns the sanitized array on success or an error string on failure so the
- * caller can respond 400. We accept only `[{emoji, title, description}]` shapes
- * with up to 5 items; missing/empty arrays are valid (clears the field).
+ * Returns the sanitized (trimmed, length-bounded) array on success or an error
+ * string on failure so the caller can respond 400. Empty arrays are valid
+ * (clears the field). `description` may be empty; `title` is required.
  */
 function parseConversationTopics(
   raw: unknown
@@ -39,7 +42,35 @@ function parseConversationTopics(
         error: `conversation_topics[${i}] requires string emoji/title/description`,
       };
     }
-    result.push({ emoji, title, description });
+    const trimmedEmoji = emoji.trim();
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    if (!trimmedTitle) {
+      return { ok: false, error: `conversation_topics[${i}].title is required` };
+    }
+    if (trimmedEmoji.length > TOPIC_EMOJI_MAX) {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}].emoji exceeds ${TOPIC_EMOJI_MAX} chars`,
+      };
+    }
+    if (trimmedTitle.length > TOPIC_TITLE_MAX) {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}].title exceeds ${TOPIC_TITLE_MAX} chars`,
+      };
+    }
+    if (trimmedDescription.length > TOPIC_DESCRIPTION_MAX) {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}].description exceeds ${TOPIC_DESCRIPTION_MAX} chars`,
+      };
+    }
+    result.push({
+      emoji: trimmedEmoji,
+      title: trimmedTitle,
+      description: trimmedDescription,
+    });
   }
   return { ok: true, value: result };
 }
@@ -158,6 +189,11 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
     const body = { ...(req.body as Partial<Profile>) };
     if (Object.prototype.hasOwnProperty.call(body, "joined_date")) {
       body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
+    }
+
+    if ("nickname" in body && typeof body.nickname !== "string") {
+      res.status(400).json({ error: "nickname must be a string" });
+      return;
     }
 
     let parsedTopics: ConversationTopic[] | undefined;
