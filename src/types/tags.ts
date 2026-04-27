@@ -18,6 +18,20 @@ export type ProfileTagSource =
   | "daily_question"
   | "posting";
 
+/**
+ * Row returned by GET /api/profiles/me/tags. Carries the per-assignment
+ * `source` and `created_at` needed to render the "NEW" badge on auto-applied
+ * tags in MyPage.
+ */
+export interface ProfileTagDetail {
+  tag_id: string;
+  name: string;
+  category: TagCategory;
+  aliases: string[];
+  source: ProfileTagSource;
+  created_at: string | null;
+}
+
 export interface SuggestedTag {
   id: string;
   user_id: string;

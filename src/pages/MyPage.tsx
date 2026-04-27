@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
@@ -12,14 +12,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
+import SuggestedTagsSheet from "@/components/SuggestedTagsSheet";
 import { useAuth } from "@/hooks/useAuth";
-import { useUpdateProfile } from "@/hooks/useProfiles";
+import { useMyProfileTagDetails, useUpdateProfile } from "@/hooks/useProfiles";
 import { useMyPostings } from "@/hooks/usePostings";
 import { useMyResponses } from "@/hooks/useAIQuestions";
+import { useSuggestedTags } from "@/hooks/useSuggestedTags";
 import { popularAreas, JOB_TYPES } from "@/lib/constants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 import { formatJoinedDate } from "@/lib/utils";
+
+/**
+ * `source='auto'` で 24h 以内に付与された profile_tag を「NEW」として扱う。
+ * `source` を絞り込むことで、ユーザーが手動で追加したタグや古い自動タグまで
+ * NEW 扱いになるのを防いでいる。
+ */
+const NEW_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export default function MyPage() {
   const { user, profile } = useAuth();
@@ -27,9 +36,12 @@ export default function MyPage() {
   const updateProfile = useUpdateProfile();
   const { data: myPostings } = useMyPostings(user?.id);
   const { data: myResponses } = useMyResponses(user?.id);
+  const { data: suggestedTags } = useSuggestedTags(user?.id);
+  const { data: tagDetails } = useMyProfileTagDetails(user?.id);
   const joinedDateLabel = formatJoinedDate(profile?.joined_date);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [jobType, setJobType] = useState("");
@@ -38,6 +50,25 @@ export default function MyPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [aiIntro, setAiIntro] = useState("");
+
+  const pendingCount = suggestedTags?.length ?? 0;
+  // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
+  // 同じ文字列。`tagDetails[].name` も同じ tags.name 由来なので、prefix の
+  // 加工なしで一致する。useMemo で再計算を抑制。
+  const newTagNames = useMemo(() => {
+    if (!tagDetails) return new Set<string>();
+    const cutoff = Date.now() - NEW_TAG_WINDOW_MS;
+    const names = new Set<string>();
+    for (const detail of tagDetails) {
+      if (detail.source !== "auto") continue;
+      if (!detail.created_at) continue;
+      const ts = Date.parse(detail.created_at);
+      if (Number.isFinite(ts) && ts >= cutoff) {
+        names.add(detail.name);
+      }
+    }
+    return names;
+  }, [tagDetails]);
 
   // プロフィールデータをフォームに反映
   useEffect(() => {
@@ -111,14 +142,38 @@ export default function MyPage() {
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
           <Sparkles className="h-3.5 w-3.5 text-accent" /> タグ
         </h3>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="rounded-full text-xs font-normal">
-              {tag}
-            </Badge>
-          ))}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {tags.map((tag) => {
+            const isNew = newTagNames.has(tag);
+            return (
+              <Badge
+                key={tag}
+                variant="secondary"
+                className="rounded-full text-xs font-normal flex items-center gap-1"
+              >
+                {tag}
+                {isNew ? (
+                  <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold leading-none text-accent-foreground">
+                    NEW
+                  </span>
+                ) : null}
+              </Badge>
+            );
+          })}
+          {pendingCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setIsSuggestionsOpen(true)}
+              aria-label={`${pendingCount}件のタグ候補を表示`}
+              className="inline-flex items-center rounded-full border border-accent/40 bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors"
+            >
+              +{pendingCount}
+            </button>
+          ) : null}
         </div>
       </div>
+
+      <SuggestedTagsSheet open={isSuggestionsOpen} onOpenChange={setIsSuggestionsOpen} />
 
       {/* AI Intro */}
       <Card>

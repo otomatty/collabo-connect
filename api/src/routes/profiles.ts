@@ -3,7 +3,7 @@ import { pool } from "../db.js";
 import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncProfileTags } from "../services/tags.js";
-import type { Profile } from "../types.js";
+import type { Profile, ProfileTagDetail } from "../types.js";
 
 const router = Router();
 
@@ -70,6 +70,32 @@ router.post("/", requireAuth, async (req: Request, res: Response): Promise<void>
     return;
   }
   res.status(201).json(r.rows[0]);
+});
+
+/**
+ * GET /api/profiles/me/tags - current user's profile_tags joined with tag rows.
+ *
+ * Unlike `profiles.tags` (a flat string[]) this exposes per-row metadata —
+ * `source` and `created_at` — needed by the MyPage suggested-tag UI to mark
+ * recently auto-applied tags with a "NEW" badge. Ordered by recency so the
+ * client can take a prefix without sorting.
+ */
+router.get("/me/tags", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const userId = req.userId!;
+  const r = await pool.query<ProfileTagDetail>(
+    `SELECT t.id AS tag_id,
+            t.name,
+            t.category,
+            t.aliases,
+            pt.source,
+            pt.created_at
+       FROM public.profile_tags pt
+       JOIN public.tags t ON t.id = pt.tag_id
+      WHERE pt.profile_id = $1
+   ORDER BY pt.created_at DESC NULLS LAST, t.name ASC`,
+    [userId]
+  );
+  res.json(r.rows);
 });
 
 /** GET /api/profiles/:id - get profile by id (public) */

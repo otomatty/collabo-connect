@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { Database } from "@/types/supabase";
+import type { ProfileTagDetail } from "@/types/tags";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -22,6 +23,27 @@ export function useProfile(id: string | undefined) {
       return apiFetch<Profile>(`/api/profiles/${id}`);
     },
     enabled: !!id,
+  });
+}
+
+/**
+ * `[profiles, me, tags, userId]` 形式で user-scoped にキャッシュする。
+ * QueryClient はセッション間で共有されるため、ID をキーに含めないと
+ * 別ユーザーがログインした直後に前ユーザーのタグ詳細が一瞬見えてしまう。
+ */
+export function myProfileTagDetailsKey(userId: string | undefined) {
+  return ["profiles", "me", "tags", userId ?? "anon"] as const;
+}
+
+/**
+ * 自分の profile_tags の詳細（source / created_at を含む）を取得。
+ * MyPage で `source='auto'` かつ直近24h の付与に「NEW」バッジを出すために使う。
+ */
+export function useMyProfileTagDetails(userId: string | undefined) {
+  return useQuery<ProfileTagDetail[]>({
+    queryKey: myProfileTagDetailsKey(userId),
+    queryFn: () => apiFetch<ProfileTagDetail[]>("/api/profiles/me/tags"),
+    enabled: !!userId,
   });
 }
 
