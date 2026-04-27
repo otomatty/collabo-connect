@@ -9,6 +9,7 @@ const CONVERSATION_TOPICS_MAX = 5;
 const TOPIC_EMOJI_MAX = 16;
 const TOPIC_TITLE_MAX = 100;
 const TOPIC_DESCRIPTION_MAX = 500;
+const NICKNAME_MAX = 50;
 
 /**
  * Validate `conversation_topics` payload coming from PUT /api/profiles/me.
@@ -191,9 +192,17 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
       body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
     }
 
-    if ("nickname" in body && typeof body.nickname !== "string") {
-      res.status(400).json({ error: "nickname must be a string" });
-      return;
+    if ("nickname" in body) {
+      if (typeof body.nickname !== "string") {
+        res.status(400).json({ error: "nickname must be a string" });
+        return;
+      }
+      // Empty string is valid (clears the nickname; matches schema default).
+      body.nickname = body.nickname.trim();
+      if (body.nickname.length > NICKNAME_MAX) {
+        res.status(400).json({ error: `nickname exceeds ${NICKNAME_MAX} chars` });
+        return;
+      }
     }
 
     let parsedTopics: ConversationTopic[] | undefined;
