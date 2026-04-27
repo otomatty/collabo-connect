@@ -3,7 +3,78 @@ import { pool } from "../db.js";
 import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncProfileTags } from "../services/tags.js";
-import type { Profile, ProfileTagDetail } from "../types.js";
+import type { ConversationTopic, Profile, ProfileTagDetail } from "../types.js";
+
+const CONVERSATION_TOPICS_MAX = 5;
+const TOPIC_EMOJI_MAX = 16;
+const TOPIC_TITLE_MAX = 100;
+const TOPIC_DESCRIPTION_MAX = 500;
+const NICKNAME_MAX = 50;
+
+/**
+ * Validate `conversation_topics` payload coming from PUT /api/profiles/me.
+ *
+ * Returns the sanitized (trimmed, length-bounded) array on success or an error
+ * string on failure so the caller can respond 400. Empty arrays are valid
+ * (clears the field). `description` may be empty; `title` is required.
+ */
+function parseConversationTopics(
+  raw: unknown
+): { ok: true; value: ConversationTopic[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) {
+    return { ok: false, error: "conversation_topics must be an array" };
+  }
+  if (raw.length > CONVERSATION_TOPICS_MAX) {
+    return {
+      ok: false,
+      error: `conversation_topics accepts at most ${CONVERSATION_TOPICS_MAX} items`,
+    };
+  }
+  const result: ConversationTopic[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (!item || typeof item !== "object") {
+      return { ok: false, error: `conversation_topics[${i}] must be an object` };
+    }
+    const { emoji, title, description } = item as Record<string, unknown>;
+    if (typeof emoji !== "string" || typeof title !== "string" || typeof description !== "string") {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}] requires string emoji/title/description`,
+      };
+    }
+    const trimmedEmoji = emoji.trim();
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    if (!trimmedTitle) {
+      return { ok: false, error: `conversation_topics[${i}].title is required` };
+    }
+    if (trimmedEmoji.length > TOPIC_EMOJI_MAX) {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}].emoji exceeds ${TOPIC_EMOJI_MAX} chars`,
+      };
+    }
+    if (trimmedTitle.length > TOPIC_TITLE_MAX) {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}].title exceeds ${TOPIC_TITLE_MAX} chars`,
+      };
+    }
+    if (trimmedDescription.length > TOPIC_DESCRIPTION_MAX) {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}].description exceeds ${TOPIC_DESCRIPTION_MAX} chars`,
+      };
+    }
+    result.push({
+      emoji: trimmedEmoji,
+      title: trimmedTitle,
+      description: trimmedDescription,
+    });
+  }
+  return { ok: true, value: result };
+}
 
 const router = Router();
 
@@ -121,8 +192,31 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
       body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
     }
 
+    if ("nickname" in body) {
+      if (typeof body.nickname !== "string") {
+        res.status(400).json({ error: "nickname must be a string" });
+        return;
+      }
+      // Empty string is valid (clears the nickname; matches schema default).
+      body.nickname = body.nickname.trim();
+      if (body.nickname.length > NICKNAME_MAX) {
+        res.status(400).json({ error: `nickname exceeds ${NICKNAME_MAX} chars` });
+        return;
+      }
+    }
+
+    let parsedTopics: ConversationTopic[] | undefined;
+    if ("conversation_topics" in body) {
+      const parsed = parseConversationTopics(body.conversation_topics);
+      if (!parsed.ok) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+      parsedTopics = parsed.value;
+    }
+
     const scalarCols = [
-      "name", "avatar_url", "role", "areas", "job_type", "ai_intro", "joined_date",
+      "name", "nickname", "avatar_url", "role", "areas", "job_type", "ai_intro", "joined_date",
     ] as const;
 
     const client = await pool.connect();
@@ -151,6 +245,22 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
           values.push(body[key]);
           i++;
         }
+      }
+      if (parsedTopics !== undefined) {
+        // Bump `conversation_topics_updated_at` only when the value actually
+        // changes, so a no-op PUT does not invalidate the topics-specific
+        // freshness signal. PG evaluates both RHS expressions against the row
+        // BEFORE any SET assignments take effect, so the CASE compares the OLD
+        // column value against the new param.
+        updates.push(`conversation_topics = $${i}::jsonb`);
+        updates.push(
+          `conversation_topics_updated_at = CASE
+             WHEN conversation_topics IS DISTINCT FROM $${i}::jsonb THEN now()
+             ELSE conversation_topics_updated_at
+           END`
+        );
+        values.push(JSON.stringify(parsedTopics));
+        i++;
       }
       if (updates.length > 0) {
         values.push(userId);
