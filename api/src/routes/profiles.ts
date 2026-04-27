@@ -3,7 +3,46 @@ import { pool } from "../db.js";
 import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncProfileTags } from "../services/tags.js";
-import type { Profile, ProfileTagDetail } from "../types.js";
+import type { ConversationTopic, Profile, ProfileTagDetail } from "../types.js";
+
+const CONVERSATION_TOPICS_MAX = 5;
+
+/**
+ * Validate `conversation_topics` payload coming from PUT /api/profiles/me.
+ *
+ * Returns the sanitized array on success or an error string on failure so the
+ * caller can respond 400. We accept only `[{emoji, title, description}]` shapes
+ * with up to 5 items; missing/empty arrays are valid (clears the field).
+ */
+function parseConversationTopics(
+  raw: unknown
+): { ok: true; value: ConversationTopic[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) {
+    return { ok: false, error: "conversation_topics must be an array" };
+  }
+  if (raw.length > CONVERSATION_TOPICS_MAX) {
+    return {
+      ok: false,
+      error: `conversation_topics accepts at most ${CONVERSATION_TOPICS_MAX} items`,
+    };
+  }
+  const result: ConversationTopic[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (!item || typeof item !== "object") {
+      return { ok: false, error: `conversation_topics[${i}] must be an object` };
+    }
+    const { emoji, title, description } = item as Record<string, unknown>;
+    if (typeof emoji !== "string" || typeof title !== "string" || typeof description !== "string") {
+      return {
+        ok: false,
+        error: `conversation_topics[${i}] requires string emoji/title/description`,
+      };
+    }
+    result.push({ emoji, title, description });
+  }
+  return { ok: true, value: result };
+}
 
 const router = Router();
 
@@ -121,8 +160,18 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
       body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
     }
 
+    let parsedTopics: ConversationTopic[] | undefined;
+    if ("conversation_topics" in body) {
+      const parsed = parseConversationTopics(body.conversation_topics);
+      if (!parsed.ok) {
+        res.status(400).json({ error: parsed.error });
+        return;
+      }
+      parsedTopics = parsed.value;
+    }
+
     const scalarCols = [
-      "name", "avatar_url", "role", "areas", "job_type", "ai_intro", "joined_date",
+      "name", "nickname", "avatar_url", "role", "areas", "job_type", "ai_intro", "joined_date",
     ] as const;
 
     const client = await pool.connect();
@@ -151,6 +200,14 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
           values.push(body[key]);
           i++;
         }
+      }
+      if (parsedTopics !== undefined) {
+        updates.push(`conversation_topics = $${i}::jsonb`);
+        values.push(JSON.stringify(parsedTopics));
+        i++;
+        // Stamp the topics-specific update time so the UI can detect "stale"
+        // topics independently of generic profile edits (which bump updated_at).
+        updates.push(`conversation_topics_updated_at = now()`);
       }
       if (updates.length > 0) {
         values.push(userId);

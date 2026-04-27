@@ -2,9 +2,20 @@
 
 export type TagCategory = "skill" | "hobby" | "area" | "role" | "other";
 
+/**
+ * Item shape for `profiles.conversation_topics` (jsonb array, max 5).
+ * Surfaces topic hints on member cards to break the ice in offline meetups.
+ */
+export interface ConversationTopic {
+  emoji: string;
+  title: string;
+  description: string;
+}
+
 export interface Profile {
   id: string;
   name: string;
+  nickname: string;
   avatar_url: string | null;
   role: string | null;
   areas: string[] | null;
@@ -12,6 +23,8 @@ export interface Profile {
   tags: string[];
   job_type: string;
   ai_intro: string | null;
+  conversation_topics: ConversationTopic[];
+  conversation_topics_updated_at: string | null;
   joined_date: string | null;
   created_at: string | null;
   updated_at: string | null;

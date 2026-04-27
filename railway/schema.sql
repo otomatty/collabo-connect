@@ -24,6 +24,12 @@ create table if not exists public.profiles (
   updated_at timestamptz default now()
 );
 
+-- Phase 3-1: nickname / conversation_topics. Idempotent for existing environments.
+alter table public.profiles
+  add column if not exists nickname text default '',
+  add column if not exists conversation_topics jsonb default '[]'::jsonb,
+  add column if not exists conversation_topics_updated_at timestamptz;
+
 -- ============================================
 -- 2. postings (掲示板の投稿)
 -- ============================================
