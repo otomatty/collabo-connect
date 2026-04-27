@@ -105,13 +105,23 @@ function SuggestionItem({
 }
 
 export default function SuggestedTagsSheet({ open, onOpenChange }: SuggestedTagsSheetProps) {
-  const { data: suggestions, isLoading, isError } = useSuggestedTags();
   // useAuth().profile は React Query の外でローカル state 管理されているため、
   // ['profiles'] の invalidate だけでは MyPage 上の `tags` が更新されない。
   // mutation 成功時に明示的に refreshProfile を呼んで自己整合させる。
-  const { refreshProfile } = useAuth();
+  const { user, refreshProfile } = useAuth();
+  const { data: suggestions, isLoading, isError } = useSuggestedTags(user?.id);
 
   const items = suggestions ?? [];
+
+  const handleMutated = () => {
+    // QueryClient invalidate と平行で auth の profile state を再取得。
+    // refreshProfile の失敗は UI ロジックを止めないためここで吸収する。
+    refreshProfile().catch((err: unknown) => {
+      const message =
+        err instanceof Error ? err.message : "プロフィールの再取得に失敗しました";
+      toast.error(message);
+    });
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -141,13 +151,7 @@ export default function SuggestedTagsSheet({ open, onOpenChange }: SuggestedTags
             </p>
           ) : (
             items.map((s) => (
-              <SuggestionItem
-                key={s.id}
-                suggestion={s}
-                onMutated={() => {
-                  void refreshProfile();
-                }}
-              />
+              <SuggestionItem key={s.id} suggestion={s} onMutated={handleMutated} />
             ))
           )}
         </div>

@@ -36,8 +36,8 @@ export default function MyPage() {
   const updateProfile = useUpdateProfile();
   const { data: myPostings } = useMyPostings(user?.id);
   const { data: myResponses } = useMyResponses(user?.id);
-  const { data: suggestedTags } = useSuggestedTags();
-  const { data: tagDetails } = useMyProfileTagDetails(!!user);
+  const { data: suggestedTags } = useSuggestedTags(user?.id);
+  const { data: tagDetails } = useMyProfileTagDetails(user?.id);
   const joinedDateLabel = formatJoinedDate(profile?.joined_date);
 
   const [isEditing, setIsEditing] = useState(false);
