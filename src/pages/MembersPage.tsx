@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuideModal } from "@/components/GuideModal";
@@ -6,24 +6,55 @@ import { useGuide } from "@/hooks/useGuide";
 import { guideConfigs } from "@/lib/guideConfig";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import { useProfiles } from "@/hooks/useProfiles";
+import { usePopularTags } from "@/hooks/useTags";
+import type { TagCategory } from "@/types/tags";
+
+type CategoryTab = "all" | TagCategory;
+
+const CATEGORY_TABS: { value: CategoryTab; label: string }[] = [
+  { value: "all", label: "すべて" },
+  { value: "skill", label: "スキル" },
+  { value: "hobby", label: "趣味" },
+  { value: "area", label: "エリア" },
+  { value: "role", label: "役職" },
+];
 
 export default function MembersPage() {
   const { data: profiles, isLoading } = useProfiles();
   const { shouldShow: showGuide, dismiss } = useGuide("members");
   const [search, setSearch] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [category, setCategory] = useState<CategoryTab>("all");
 
-  const allTags = Array.from(new Set((profiles ?? []).flatMap((u) => u.tags ?? [])));
+  const { data: popularTags } = usePopularTags({
+    category: category === "all" ? undefined : category,
+    limit: 8,
+  });
+
+  const tagBadges = useMemo(() => {
+    if (category === "all") {
+      const allTags = Array.from(new Set((profiles ?? []).flatMap((u) => u.tags ?? [])));
+      return allTags.slice(0, 8);
+    }
+    return (popularTags ?? []).map((t) => t.name);
+  }, [category, popularTags, profiles]);
 
   const filtered = (profiles ?? []).filter((u) => {
-    const matchSearch = !search || u.name.includes(search) || (u.tags ?? []).some((t) => t.includes(search));
+    const matchSearch =
+      !search || u.name.includes(search) || (u.tags ?? []).some((t) => t.includes(search));
     const matchTag = !selectedTag || (u.tags ?? []).includes(selectedTag);
     return matchSearch && matchTag;
   });
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value as CategoryTab);
+    setSelectedTag(null);
+  };
 
   return (
     <div className="mx-auto max-w-lg px-4 py-6 space-y-4">
@@ -40,8 +71,22 @@ export default function MembersPage() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {allTags.slice(0, 8).map((tag) => (
+      <Tabs value={category} onValueChange={handleCategoryChange}>
+        <TabsList className="w-full rounded-full bg-secondary">
+          {CATEGORY_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className="rounded-full flex-1 text-xs"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      <div className="flex flex-wrap gap-1.5 min-h-[1.75rem]">
+        {tagBadges.map((tag) => (
           <Badge
             key={tag}
             variant={selectedTag === tag ? "default" : "secondary"}
@@ -56,6 +101,14 @@ export default function MembersPage() {
       {isLoading ? (
         <div className="flex justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">
+          {selectedTag
+            ? `「${selectedTag}」を持つメンバーが見つかりません`
+            : search.trim()
+              ? "検索条件に一致するメンバーが見つかりません"
+              : "該当するメンバーが見つかりません"}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
