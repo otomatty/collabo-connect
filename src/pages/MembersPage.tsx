@@ -106,7 +106,9 @@ export default function MembersPage() {
         <div className="py-10 text-center text-sm text-muted-foreground">
           {selectedTag
             ? `「${selectedTag}」を持つメンバーが見つかりません`
-            : "該当するメンバーが見つかりません"}
+            : search.trim()
+              ? "検索条件に一致するメンバーが見つかりません"
+              : "該当するメンバーが見つかりません"}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
