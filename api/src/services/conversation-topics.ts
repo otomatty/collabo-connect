@@ -195,6 +195,17 @@ function pruneRecentTopicsHashes(now: number): void {
   }
 }
 
+/**
+ * Fingerprint stable request inputs only.
+ *
+ * `aiIntro` is intentionally excluded: at the fire-and-forget call site in
+ * ai-interview.ts the value passed is the freshly-generated introduction
+ * from Gemini (temperature 0.8), which is non-deterministic. Including it
+ * would mean every retry of the same generate action produces a different
+ * fingerprint, defeating the purpose of the dedup cache. profile + personCard
+ * are sufficient to identify the same interview session — this mirrors
+ * tag-suggestions.ts's fingerprintInterview, which uses messages + personCard.
+ */
 function fingerprintInput(userId: string, input: ConversationTopicsInput): string {
   const profile = input.profile ?? {};
   const payload = JSON.stringify({
@@ -203,7 +214,6 @@ function fingerprintInput(userId: string, input: ConversationTopicsInput): strin
     job_type: profile.job_type ?? "",
     tags: [...(profile.tags ?? [])].sort(),
     personCard: typeof input.personCard === "string" ? input.personCard.trim() : "",
-    aiIntro: typeof input.aiIntro === "string" ? input.aiIntro.trim() : "",
   });
   return createHash("sha256").update(userId).update(" ").update(payload).digest("hex");
 }
