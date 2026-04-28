@@ -5,6 +5,7 @@ import {
   buildGenerateSystemPrompt,
 } from "../prompts/index.js";
 import { extractAndPersistTags } from "../services/tag-suggestions.js";
+import { generateAndSaveConversationTopics } from "../services/conversation-topics.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-3-flash-preview";
@@ -195,6 +196,13 @@ personCard には今回の回答で得られた新情報を追記してくださ
           messages,
           personCard,
           profile,
+        });
+        // Same fire-and-forget contract for conversation topics: failures are
+        // logged inside the service and never null out existing topics.
+        void generateAndSaveConversationTopics(userId, {
+          profile,
+          personCard,
+          aiIntro: introduction,
         });
       }
       return;

@@ -3,6 +3,11 @@ import { pool } from "../db.js";
 import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncProfileTags } from "../services/tags.js";
+import {
+  generateConversationTopics,
+  saveConversationTopics,
+} from "../services/conversation-topics.js";
+import { CONVERSATION_TOPICS_COUNT } from "../prompts/conversation-topics.js";
 import type { ConversationTopic, Profile, ProfileTagDetail } from "../types.js";
 
 const CONVERSATION_TOPICS_MAX = 5;
@@ -168,6 +173,72 @@ router.get("/me/tags", requireAuth, async (req: Request, res: Response): Promise
   );
   res.json(r.rows);
 });
+
+/**
+ * POST /api/profiles/me/conversation-topics/regenerate
+ *
+ * Used by the MyPage "再生成" button (Phase 3-7). Runs Gemini synchronously so
+ * the client immediately renders the new topics. Reuses the same generator as
+ * the post-interview fire-and-forget path, but pulls input from the persisted
+ * profile (name / role / job_type / tags / ai_intro) since personCard is not
+ * stored — it lives only inside the AI interview session.
+ *
+ * Failure modes follow the issue's acceptance criteria: if generation returns
+ * no topics (Gemini error, empty payload, etc.) we leave the existing value
+ * untouched and respond 502 so the UI can show an error toast without losing
+ * the previous topics.
+ */
+router.post(
+  "/me/conversation-topics/regenerate",
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.userId!;
+      const r = await pool.query<Profile>(
+        `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+        [userId]
+      );
+      if (r.rows.length === 0) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      const profile = r.rows[0];
+      const topics = await generateConversationTopics({
+        profile: {
+          name: profile.name,
+          role: profile.role,
+          job_type: profile.job_type,
+          tags: profile.tags,
+        },
+        aiIntro: profile.ai_intro,
+      });
+      // Insist on the full set so a partial Gemini response doesn't replace
+      // a complete prior set with a worse one. Mirrors the fire-and-forget
+      // path's preserve-on-incomplete behavior.
+      if (topics.length < CONVERSATION_TOPICS_COUNT) {
+        res.status(502).json({ error: "Failed to generate conversation topics" });
+        return;
+      }
+      const saved = await saveConversationTopics(userId, topics);
+      if (!saved) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      const updated = await pool.query<Profile>(
+        `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+        [userId]
+      );
+      if (updated.rows.length === 0) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
+      res.json(updated.rows[0]);
+    } catch (err) {
+      console.error("POST /api/profiles/me/conversation-topics/regenerate error:", err);
+      res.status(500).json({ error: "Failed to regenerate conversation topics" });
+    }
+  }
+);
 
 /** GET /api/profiles/:id - get profile by id (public) */
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {
