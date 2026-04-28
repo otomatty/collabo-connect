@@ -7,6 +7,7 @@ import {
   generateConversationTopics,
   saveConversationTopics,
 } from "../services/conversation-topics.js";
+import { CONVERSATION_TOPICS_COUNT } from "../prompts/conversation-topics.js";
 import type { ConversationTopic, Profile, ProfileTagDetail } from "../types.js";
 
 const CONVERSATION_TOPICS_MAX = 5;
@@ -211,15 +212,26 @@ router.post(
         },
         aiIntro: profile.ai_intro,
       });
-      if (topics.length === 0) {
+      // Insist on the full set so a partial Gemini response doesn't replace
+      // a complete prior set with a worse one. Mirrors the fire-and-forget
+      // path's preserve-on-incomplete behavior.
+      if (topics.length < CONVERSATION_TOPICS_COUNT) {
         res.status(502).json({ error: "Failed to generate conversation topics" });
         return;
       }
-      await saveConversationTopics(userId, topics);
+      const saved = await saveConversationTopics(userId, topics);
+      if (!saved) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
       const updated = await pool.query<Profile>(
         `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
         [userId]
       );
+      if (updated.rows.length === 0) {
+        res.status(404).json({ error: "Profile not found" });
+        return;
+      }
       res.json(updated.rows[0]);
     } catch (err) {
       console.error("POST /api/profiles/me/conversation-topics/regenerate error:", err);

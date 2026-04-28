@@ -138,23 +138,33 @@ export async function generateConversationTopics(
 }
 
 /**
- * Persist generated topics on the profile row. Only writes when at least one
- * topic was produced — an empty result preserves the previous value rather
- * than wiping it (matches the issue acceptance: failures must not null out
- * existing topics).
+ * Persist generated topics on the profile row. Returns true iff a profile row
+ * was actually updated, so callers can distinguish "saved" from "user has no
+ * profile row yet" — the latter must not be cached as committed.
+ *
+ * Only writes when the topic count matches the spec (3); a partial result
+ * preserves the previous value rather than overwriting it with a worse set.
+ *
+ * `conversation_topics_updated_at` is bumped only when the value actually
+ * changes (matches the CASE expression used by PUT /api/profiles/me) so
+ * regenerating to identical content does not invalidate the freshness signal.
  */
 export async function saveConversationTopics(
   userId: string,
   topics: ConversationTopic[]
-): Promise<void> {
-  if (topics.length === 0) return;
-  await pool.query(
+): Promise<boolean> {
+  if (topics.length !== CONVERSATION_TOPICS_COUNT) return false;
+  const r = await pool.query(
     `UPDATE public.profiles
         SET conversation_topics = $2::jsonb,
-            conversation_topics_updated_at = now()
+            conversation_topics_updated_at = CASE
+              WHEN conversation_topics IS DISTINCT FROM $2::jsonb THEN now()
+              ELSE conversation_topics_updated_at
+            END
       WHERE id = $1`,
     [userId, JSON.stringify(topics)]
   );
+  return (r.rowCount ?? 0) > 0;
 }
 
 /**
@@ -228,11 +238,19 @@ export async function generateAndSaveConversationTopics(
   let committed = false;
   try {
     const topics = await generateConversationTopics(input);
-    if (topics.length === 0) {
-      // Preserve existing value on empty/failed generation.
+    if (topics.length < CONVERSATION_TOPICS_COUNT) {
+      // Preserve existing value on incomplete/failed generation. A partial
+      // set (1-2 valid topics out of 3) would otherwise overwrite a complete
+      // prior set with a worse one.
       return;
     }
-    await saveConversationTopics(userId, topics);
+    const saved = await saveConversationTopics(userId, topics);
+    if (!saved) {
+      // Profile row missing — don't cache as committed, so a later retry
+      // (after the row gets created) can run again instead of being
+      // suppressed for the full TTL.
+      return;
+    }
     committed = true;
     console.log(
       `generateAndSaveConversationTopics: user=${userId} saved=${topics.length}`
