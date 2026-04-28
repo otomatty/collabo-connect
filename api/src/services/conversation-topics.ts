@@ -170,9 +170,16 @@ export async function saveConversationTopics(
 /**
  * Idempotency window for fire-and-forget invocations against the same
  * (user, input) fingerprint. Mirrors the rationale in tag-suggestions:
- * the frontend may resubmit `generate` (retry, double click, route remount)
- * within seconds, and the regenerate button on MyPage is similarly
- * easy to spam. Caching here avoids the duplicate Gemini round trip.
+ * the frontend may resubmit interview `generate` (retry, double click,
+ * route remount) within seconds without the user knowing, and caching here
+ * avoids the duplicate Gemini round trip on that implicit background path.
+ *
+ * Note: this dedup applies ONLY to the fire-and-forget path
+ * (`generateAndSaveConversationTopics`). `POST /api/profiles/me/conversation-topics/regenerate`
+ * is an explicit user-initiated action and intentionally bypasses this cache —
+ * a second click of the "再生成" button must always run, even with an
+ * unchanged fingerprint, otherwise the button would silently no-op for 5
+ * minutes after a successful run.
  */
 const RECENT_TOPICS_TTL_MS = 5 * 60 * 1000;
 const RECENT_TOPICS_MAX_ENTRIES = 1000;
@@ -221,11 +228,15 @@ function fingerprintInput(userId: string, input: ConversationTopicsInput): strin
 /**
  * Fire-and-forget orchestration: generate topics for `userId` and save them.
  * Never throws — errors are logged so the caller (interview `generate`
- * response, regenerate endpoint) can return without waiting on this work.
+ * response) can return without waiting on this work.
  *
  * Idempotency: the same (userId, input) fingerprint is suppressed for a
  * short window. The cache slot is cleared on failure so a transient Gemini
  * error doesn't lock the user out of legitimate retries.
+ *
+ * Not used by `POST /me/conversation-topics/regenerate` — that route calls
+ * `generateConversationTopics` + `saveConversationTopics` directly to bypass
+ * this dedup, since it is driven by an explicit user click.
  */
 export async function generateAndSaveConversationTopics(
   userId: string,
