@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { Database } from "@/types/supabase";
-import type { ProfileTagDetail } from "@/types/tags";
+import type { ProfilePublicTag, ProfileTagDetail } from "@/types/tags";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
@@ -21,6 +21,22 @@ export function useProfile(id: string | undefined) {
     queryFn: async () => {
       if (!id) return null;
       return apiFetch<Profile>(`/api/profiles/${id}`);
+    },
+    enabled: !!id,
+  });
+}
+
+/**
+ * メンバー詳細ページで使う、他人プロフィールのタグ（カテゴリ付き）。
+ * `/api/profiles/:id` は flat な `tags: string[]` しか返さないので、
+ * カテゴリ別グルーピング表示のためにこちらを別フェッチする。
+ */
+export function useProfileTags(id: string | undefined) {
+  return useQuery<ProfilePublicTag[]>({
+    queryKey: ["profiles", id, "tags"],
+    queryFn: async () => {
+      if (!id) return [];
+      return apiFetch<ProfilePublicTag[]>(`/api/profiles/${id}/tags`);
     },
     enabled: !!id,
   });

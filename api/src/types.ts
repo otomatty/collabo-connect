@@ -62,6 +62,18 @@ export interface ProfileTagDetail {
   created_at: string | null;
 }
 
+/**
+ * Row returned by GET /api/profiles/:id/tags. A public, minimal projection
+ * used by MemberDetailPage to group tags by category. Intentionally omits
+ * `source` / `created_at` so per-assignment provenance is not exposed for
+ * other users' profiles.
+ */
+export interface ProfilePublicTag {
+  tag_id: string;
+  name: string;
+  category: TagCategory;
+}
+
 export interface SuggestedTag {
   id: string;
   user_id: string;
