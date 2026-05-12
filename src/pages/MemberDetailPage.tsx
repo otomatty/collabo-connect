@@ -43,7 +43,7 @@ function groupTagsByCategory(
 export default function MemberDetailPage() {
   const { id } = useParams({ strict: false });
   const { shouldShow: showGuide, dismiss } = useGuide("member-detail");
-  const { user: viewer, profile: viewerProfile } = useAuth();
+  const { user: viewer, profile: viewerProfile, loading: isAuthLoading } = useAuth();
   const { data: user, isLoading } = useProfile(id);
   const { data: profileTags, isLoading: isTagsLoading } = useProfileTags(id);
   const isOwnProfile = !!viewer?.id && viewer.id === id;
@@ -52,8 +52,9 @@ export default function MemberDetailPage() {
 
   // Wait for the tags fetch too: the tag section is prominent on this page,
   // so resolving both in parallel avoids the section flashing empty before
-  // categories render.
-  if (isLoading || isTagsLoading) {
+  // categories render. Also wait for auth so the「共通点」section doesn't pop
+  // in after first paint and cause layout shift.
+  if (isLoading || isTagsLoading || isAuthLoading) {
     return (
       <div className="flex justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />

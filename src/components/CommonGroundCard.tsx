@@ -35,9 +35,15 @@ export function computeCommonGround(
   const viewerTagSet = new Set(viewerTags.map(normalize));
   const viewerAreaSet = new Set(viewerAreas.map(normalize));
 
-  const commonAreas = memberAreas.filter((area) =>
-    viewerAreaSet.has(normalize(area))
-  );
+  // Dedupe member areas by normalized key so e.g. "新宿" と " 新宿 " が
+  // 同じ共通エリアとして二重表示されない。
+  const commonAreaMap = new Map<string, string>();
+  for (const area of memberAreas) {
+    const key = normalize(area);
+    if (!viewerAreaSet.has(key) || commonAreaMap.has(key)) continue;
+    commonAreaMap.set(key, area.trim());
+  }
+  const commonAreas = Array.from(commonAreaMap.values());
 
   const commonTags = memberTags.filter((tag) =>
     viewerTagSet.has(normalize(tag.name))

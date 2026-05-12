@@ -22,6 +22,16 @@ describe("computeCommonGround", () => {
     expect(result.fallback).toBeNull();
   });
 
+  it("共通エリアは正規化キーで重複排除し、trim 済みの値を返す", () => {
+    const result = computeCommonGround(
+      [],
+      ["新宿"],
+      [],
+      ["新宿", " 新宿 ", "渋谷"]
+    );
+    expect(result.commonAreas).toEqual(["新宿"]);
+  });
+
   it("大文字小文字の違いを無視してマッチする", () => {
     const result = computeCommonGround(
       ["react"],
