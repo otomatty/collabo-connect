@@ -1,9 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { Database } from "@/types/supabase";
+import type { ConversationTopic } from "@/types/profile";
 import type { ProfilePublicTag, ProfileTagDetail } from "@/types/tags";
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+/**
+ * API-shaped Profile: same as the Supabase Row, but with `conversation_topics`
+ * narrowed from the generated `Json` to the parsed `ConversationTopic[]` the
+ * `/api/profiles*` endpoints actually return. Keeping the override here means
+ * call sites can read `user.conversation_topics` without manual casts.
+ */
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+export type Profile = Omit<ProfileRow, "conversation_topics"> & {
+  conversation_topics: ConversationTopic[];
+};
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 /** 全プロフィールを取得 */

@@ -10,7 +10,6 @@ import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import { useProfile, useProfileTags } from "@/hooks/useProfiles";
 import { formatJoinedDate } from "@/lib/utils";
-import type { ConversationTopic } from "@/types/profile";
 import type { ProfilePublicTag, TagCategory } from "@/types/tags";
 
 /**
@@ -43,16 +42,14 @@ export default function MemberDetailPage() {
   const { id } = useParams({ strict: false });
   const { shouldShow: showGuide, dismiss } = useGuide("member-detail");
   const { data: user, isLoading } = useProfile(id);
-  const { data: profileTags } = useProfileTags(id);
-  const joinedDateLabel = formatJoinedDate(user?.joined_date);
+  const { data: profileTags, isLoading: isTagsLoading } = useProfileTags(id);
 
   const groupedTags = useMemo(() => groupTagsByCategory(profileTags), [profileTags]);
 
-  const conversationTopics: ConversationTopic[] = Array.isArray(user?.conversation_topics)
-    ? (user!.conversation_topics as unknown as ConversationTopic[])
-    : [];
-
-  if (isLoading) {
+  // Wait for the tags fetch too: the tag section is prominent on this page,
+  // so resolving both in parallel avoids the section flashing empty before
+  // categories render.
+  if (isLoading || isTagsLoading) {
     return (
       <div className="flex justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -69,6 +66,8 @@ export default function MemberDetailPage() {
     );
   }
 
+  const joinedDateLabel = formatJoinedDate(user.joined_date);
+  const conversationTopics = user.conversation_topics ?? [];
   const nickname = user.nickname?.trim() ?? "";
   const areas = user.areas ?? [];
 

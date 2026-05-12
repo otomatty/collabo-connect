@@ -17,12 +17,9 @@ import { cn } from "@/lib/utils";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import { useAuth } from "@/hooks/useAuth";
-import { useProfiles } from "@/hooks/useProfiles";
+import { useProfiles, type Profile } from "@/hooks/useProfiles";
 import { useCreatePosting } from "@/hooks/usePostings";
 import { popularAreas } from "@/lib/constants";
-import type { Database } from "@/types/supabase";
-
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
 const categories = [
   { value: "food", label: "🍽️ ごはん・飲み" },

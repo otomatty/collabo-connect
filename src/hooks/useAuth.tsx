@@ -1,9 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { authClient } from "@/lib/auth-client";
 import { apiFetch } from "@/lib/api";
-import type { Database } from "@/types/supabase";
-
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+import type { Profile } from "@/hooks/useProfiles";
 
 interface AuthContextType {
   user: { id: string; name: string; email?: string; image?: string | null } | null;
