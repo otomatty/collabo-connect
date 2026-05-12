@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Briefcase, MapPin, CalendarDays } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
+import CommonGroundCard from "@/components/CommonGroundCard";
+import { useAuth } from "@/hooks/useAuth";
 import { useProfile, useProfileTags } from "@/hooks/useProfiles";
 import { formatJoinedDate } from "@/lib/utils";
 import type { ProfilePublicTag, TagCategory } from "@/types/tags";
@@ -41,15 +43,18 @@ function groupTagsByCategory(
 export default function MemberDetailPage() {
   const { id } = useParams({ strict: false });
   const { shouldShow: showGuide, dismiss } = useGuide("member-detail");
+  const { user: viewer, profile: viewerProfile, loading: isAuthLoading } = useAuth();
   const { data: user, isLoading } = useProfile(id);
   const { data: profileTags, isLoading: isTagsLoading } = useProfileTags(id);
+  const isOwnProfile = !!viewer?.id && viewer.id === id;
 
   const groupedTags = useMemo(() => groupTagsByCategory(profileTags), [profileTags]);
 
   // Wait for the tags fetch too: the tag section is prominent on this page,
   // so resolving both in parallel avoids the section flashing empty before
-  // categories render.
-  if (isLoading || isTagsLoading) {
+  // categories render. Also wait for auth so the「共通点」section doesn't pop
+  // in after first paint and cause layout shift.
+  if (isLoading || isTagsLoading || isAuthLoading) {
     return (
       <div className="flex justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -114,14 +119,14 @@ export default function MemberDetailPage() {
       </section>
 
       {/* 2. 共通点ハイライト (#16) */}
-      <section>
-        <h2 className="text-sm font-semibold mb-2">共通点</h2>
-        <Card className="border-dashed">
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            あなたとの共通点は近日公開予定です（Coming Soon）。
-          </CardContent>
-        </Card>
-      </section>
+      {!isOwnProfile && viewerProfile ? (
+        <CommonGroundCard
+          viewerTags={viewerProfile.tags ?? []}
+          viewerAreas={viewerProfile.areas ?? []}
+          memberTags={profileTags ?? []}
+          memberAreas={areas}
+        />
+      ) : null}
 
       {/* 3. 会話のきっかけ (#17) */}
       {conversationTopics.length > 0 ? (
