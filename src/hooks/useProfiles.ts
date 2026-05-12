@@ -1,9 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import type { Database } from "@/types/supabase";
-import type { ProfileTagDetail } from "@/types/tags";
+import type { ConversationTopic } from "@/types/profile";
+import type { ProfilePublicTag, ProfileTagDetail } from "@/types/tags";
 
-type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+/**
+ * API-shaped Profile: same as the Supabase Row, but with `conversation_topics`
+ * narrowed from the generated `Json` to the parsed `ConversationTopic[]` the
+ * `/api/profiles*` endpoints actually return. Keeping the override here means
+ * call sites can read `user.conversation_topics` without manual casts.
+ */
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+export type Profile = Omit<ProfileRow, "conversation_topics"> & {
+  conversation_topics: ConversationTopic[];
+};
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 /** 全プロフィールを取得 */
@@ -21,6 +31,22 @@ export function useProfile(id: string | undefined) {
     queryFn: async () => {
       if (!id) return null;
       return apiFetch<Profile>(`/api/profiles/${id}`);
+    },
+    enabled: !!id,
+  });
+}
+
+/**
+ * メンバー詳細ページで使う、他人プロフィールのタグ（カテゴリ付き）。
+ * `/api/profiles/:id` は flat な `tags: string[]` しか返さないので、
+ * カテゴリ別グルーピング表示のためにこちらを別フェッチする。
+ */
+export function useProfileTags(id: string | undefined) {
+  return useQuery<ProfilePublicTag[]>({
+    queryKey: ["profiles", id, "tags"],
+    queryFn: async () => {
+      if (!id) return [];
+      return apiFetch<ProfilePublicTag[]>(`/api/profiles/${id}/tags`);
     },
     enabled: !!id,
   });

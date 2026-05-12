@@ -32,6 +32,16 @@ export interface ProfileTagDetail {
   created_at: string | null;
 }
 
+/**
+ * Row returned by GET /api/profiles/:id/tags. Public projection used by
+ * MemberDetailPage to group tags by category.
+ */
+export interface ProfilePublicTag {
+  tag_id: string;
+  name: string;
+  category: TagCategory;
+}
+
 export interface SuggestedTag {
   id: string;
   user_id: string;

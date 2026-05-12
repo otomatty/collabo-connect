@@ -8,7 +8,12 @@ import {
   saveConversationTopics,
 } from "../services/conversation-topics.js";
 import { CONVERSATION_TOPICS_COUNT } from "../prompts/conversation-topics.js";
-import type { ConversationTopic, Profile, ProfileTagDetail } from "../types.js";
+import type {
+  ConversationTopic,
+  Profile,
+  ProfilePublicTag,
+  ProfileTagDetail,
+} from "../types.js";
 
 const CONVERSATION_TOPICS_MAX = 5;
 const TOPIC_EMOJI_MAX = 16;
@@ -239,6 +244,27 @@ router.post(
     }
   }
 );
+
+/**
+ * GET /api/profiles/:id/tags - public projection of a profile's tags with
+ * category info. Used by MemberDetailPage to group tags by category without
+ * bloating the main `GET /api/profiles/:id` payload (which is also shared by
+ * the members list endpoint). Returns an empty array for profiles with no
+ * tags — we don't distinguish 404 here because the parent profile fetch
+ * already handles existence.
+ */
+router.get("/:id/tags", async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const r = await pool.query<ProfilePublicTag>(
+    `SELECT t.id AS tag_id, t.name, t.category
+       FROM public.profile_tags pt
+       JOIN public.tags t ON t.id = pt.tag_id
+      WHERE pt.profile_id = $1
+   ORDER BY t.category ASC, t.name ASC`,
+    [id]
+  );
+  res.json(r.rows);
+});
 
 /** GET /api/profiles/:id - get profile by id (public) */
 router.get("/:id", async (req: Request, res: Response): Promise<void> => {

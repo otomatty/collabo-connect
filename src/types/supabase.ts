@@ -171,11 +171,14 @@ export type Database = {
           ai_intro: string | null
           areas: string[] | null
           avatar_url: string | null
+          conversation_topics: Json
+          conversation_topics_updated_at: string | null
           created_at: string | null
           id: string
           job_type: string
           joined_date: string | null
           name: string
+          nickname: string
           role: string | null
           tags: string[] | null
           updated_at: string | null
@@ -184,11 +187,14 @@ export type Database = {
           ai_intro?: string | null
           areas?: string[] | null
           avatar_url?: string | null
+          conversation_topics?: Json
+          conversation_topics_updated_at?: string | null
           created_at?: string | null
           id: string
           job_type?: string
           joined_date?: string | null
           name: string
+          nickname?: string
           role?: string | null
           tags?: string[] | null
           updated_at?: string | null
@@ -197,11 +203,14 @@ export type Database = {
           ai_intro?: string | null
           areas?: string[] | null
           avatar_url?: string | null
+          conversation_topics?: Json
+          conversation_topics_updated_at?: string | null
           created_at?: string | null
           id?: string
           job_type?: string
           joined_date?: string | null
           name?: string
+          nickname?: string
           role?: string | null
           tags?: string[] | null
           updated_at?: string | null
