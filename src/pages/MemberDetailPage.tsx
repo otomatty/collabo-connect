@@ -9,6 +9,7 @@ import { Briefcase, MapPin, CalendarDays } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import CommonGroundCard from "@/components/CommonGroundCard";
+import ConversationTopicsCard from "@/components/ConversationTopicsCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile, useProfileTags } from "@/hooks/useProfiles";
 import { formatJoinedDate } from "@/lib/utils";
@@ -129,30 +130,7 @@ export default function MemberDetailPage() {
       ) : null}
 
       {/* 3. 会話のきっかけ (#17) */}
-      {conversationTopics.length > 0 ? (
-        <section>
-          <h2 className="text-sm font-semibold mb-2">会話のきっかけ</h2>
-          <div className="space-y-2">
-            {conversationTopics.map((topic, idx) => (
-              <Card key={`${topic.title}-${idx}`}>
-                <CardContent className="p-4 flex gap-3">
-                  <span className="text-2xl leading-none shrink-0" aria-hidden>
-                    {topic.emoji}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm">{topic.title}</p>
-                    {topic.description ? (
-                      <p className="text-sm text-muted-foreground mt-0.5">
-                        {topic.description}
-                      </p>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <ConversationTopicsCard topics={conversationTopics} />
 
       {/* 4. タグ (カテゴリ別) */}
       <section>
