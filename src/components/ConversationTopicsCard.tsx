@@ -13,7 +13,7 @@ export default function ConversationTopicsCard({
   return (
     <section>
       <h2 className="text-sm font-semibold mb-2">
-        💬 こんな話題で盛り上がれそう
+        <span aria-hidden="true">💬 </span>こんな話題で盛り上がれそう
       </h2>
       <div className="space-y-2">
         {topics.map((topic, idx) => (
