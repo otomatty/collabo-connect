@@ -28,17 +28,21 @@ describe("<ConversationTopicsCard />", () => {
     expect(screen.getByText("ラーメン")).toBeInTheDocument();
     expect(screen.getByText("サッカー")).toBeInTheDocument();
     expect(screen.getByText("週末はバンド活動をしています")).toBeInTheDocument();
+    expect(screen.getByText("新宿の名店巡りが趣味")).toBeInTheDocument();
+    expect(screen.getByText("観戦も実際にプレイするのも好き")).toBeInTheDocument();
     expect(screen.getByText("🎸")).toBeInTheDocument();
+    expect(screen.getByText("🍜")).toBeInTheDocument();
+    expect(screen.getByText("⚽")).toBeInTheDocument();
   });
 
   it("description が空のトピックは title のみ表示する", () => {
-    render(<ConversationTopicsCard topics={[topic("📚", "読書")]} />);
+    const { container } = render(
+      <ConversationTopicsCard topics={[topic("📚", "読書")]} />
+    );
 
     expect(screen.getByText("読書")).toBeInTheDocument();
-    // description 用の段落は描画されない（title のみ）
-    expect(screen.getAllByText(/.+/).map((el) => el.textContent)).toContain(
-      "読書"
-    );
+    // description が空なので説明用の <p> は描画されず、title 用の <p> のみ存在する
+    expect(container.querySelectorAll("p")).toHaveLength(1);
   });
 
   it("トピック0件のときはセクションごと描画しない", () => {
