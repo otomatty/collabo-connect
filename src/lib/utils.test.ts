@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn, formatJapaneseDate, formatJoinedDate } from "./utils";
+import { cn, formatJapaneseDate, formatJoinedDate, formatJstDate } from "./utils";
 
 describe("cn", () => {
   it("単一のクラス名をマージする", () => {
@@ -57,5 +57,23 @@ describe("formatJapaneseDate", () => {
   it("値がない場合は空文字を返す", () => {
     expect(formatJapaneseDate(null)).toBe("");
     expect(formatJapaneseDate(undefined)).toBe("");
+  });
+});
+
+describe("formatJstDate", () => {
+  it("UTC午前0時台のタイムスタンプをJSTの日付に変換する", () => {
+    // 2026-06-07T15:30:00Z = 2026-06-08 00:30 JST → 8日として表示する
+    expect(formatJstDate("2026-06-07T15:30:00.000Z")).toBe("2026年6月8日");
+  });
+
+  it("通常時間帯のタイムスタンプを年月日表示に変換する", () => {
+    expect(formatJstDate("2026-06-08T03:00:00.000Z")).toBe("2026年6月8日");
+  });
+
+  it("値がない・不正な場合は空文字を返す", () => {
+    expect(formatJstDate(null)).toBe("");
+    expect(formatJstDate(undefined)).toBe("");
+    expect(formatJstDate("")).toBe("");
+    expect(formatJstDate("not-a-date")).toBe("");
   });
 });

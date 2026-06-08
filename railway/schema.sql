@@ -47,6 +47,10 @@ create table if not exists public.postings (
   updated_at timestamptz default now()
 );
 
+-- Supports GET /api/profiles/:id/activity (posting_created) and the
+-- creator-scoped lookups in /api/postings/mine without a full table scan.
+create index if not exists postings_creator_id_idx on public.postings (creator_id);
+
 -- ============================================
 -- 3. posting_participants (投稿への参加者)
 -- ============================================
@@ -58,6 +62,12 @@ create table if not exists public.posting_participants (
   created_at timestamptz default now(),
   unique (posting_id, user_id)
 );
+
+-- The (posting_id, user_id) unique index can't serve user_id-only lookups,
+-- which GET /api/profiles/:id/activity (posting_participated) and
+-- /api/postings/mine both need.
+create index if not exists posting_participants_user_id_idx
+  on public.posting_participants (user_id);
 
 -- ============================================
 -- 4. ai_questions (AIインタビュー質問)
@@ -81,6 +91,12 @@ create table if not exists public.ai_question_responses (
   created_at timestamptz default now(),
   unique (question_id, user_id)
 );
+
+-- user_id-only lookups for GET /api/profiles/:id/activity (question_answered)
+-- and GET /api/ai-question-responses/me; the (question_id, user_id) unique
+-- index doesn't cover them.
+create index if not exists ai_question_responses_user_id_idx
+  on public.ai_question_responses (user_id);
 
 -- ============================================
 -- 6. tags (タグ辞書)

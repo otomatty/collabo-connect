@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { getCategoryLabel } from "@/lib/constants";
-import { formatJapaneseDate } from "@/lib/utils";
+import { formatJstDate } from "@/lib/utils";
 import type { Activity } from "@/hooks/useProfiles";
 
 interface RecentActivityListProps {
@@ -53,7 +53,7 @@ export default function RecentActivityList({
   return (
     <ul className="space-y-2">
       {activities.map((activity) => {
-        const at = formatJapaneseDate(activity.at);
+        const at = formatJstDate(activity.at);
 
         if (activity.type === "question_answered") {
           return (
