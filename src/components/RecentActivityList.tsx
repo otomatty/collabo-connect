@@ -16,12 +16,13 @@ const ACTION_LABEL: Record<"join" | "interested" | "online", string> = {
 };
 
 /**
- * 各エントリの安定したキー。募集系は posting.id、質問回答は at で一意化する。
- * （同一秒に複数回答する可能性は無視できるほど低いので at を採用）
+ * 各エントリの安定したキー。募集系は posting.id で一意化する。質問回答は
+ * API がレスポンス ID を返さないため at + 質問文を組み合わせて衝突を避ける
+ * （同一タイムスタンプの別質問でもキーが重複しない）。
  */
 function activityKey(activity: Activity): string {
   return activity.type === "question_answered"
-    ? `question-${activity.at}`
+    ? `question-${activity.at}-${activity.question}`
     : `${activity.type}-${activity.posting.id}`;
 }
 

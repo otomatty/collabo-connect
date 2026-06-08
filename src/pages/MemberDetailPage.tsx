@@ -48,7 +48,11 @@ export default function MemberDetailPage() {
   const { user: viewer, profile: viewerProfile, loading: isAuthLoading } = useAuth();
   const { data: user, isLoading } = useProfile(id);
   const { data: profileTags, isLoading: isTagsLoading } = useProfileTags(id);
-  const { data: activity, isLoading: isActivityLoading } = useProfileActivity(id);
+  const {
+    data: activity,
+    isLoading: isActivityLoading,
+    isError: isActivityError,
+  } = useProfileActivity(id);
   const isOwnProfile = !!viewer?.id && viewer.id === id;
 
   const groupedTags = useMemo(() => groupTagsByCategory(profileTags), [profileTags]);
@@ -168,6 +172,10 @@ export default function MemberDetailPage() {
         <h2 className="text-sm font-semibold mb-2">最近の活動</h2>
         {isActivityLoading ? (
           <p className="text-sm text-muted-foreground">読み込み中...</p>
+        ) : isActivityError ? (
+          <p className="text-sm text-destructive">
+            活動情報の読み込みに失敗しました。
+          </p>
         ) : (
           <RecentActivityList activities={activity ?? []} />
         )}

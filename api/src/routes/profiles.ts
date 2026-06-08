@@ -29,7 +29,8 @@ const ACTIVITY_LIMIT_MAX = 20;
 /** Raw row shape returned by the activity UNION query before hydration. */
 interface ActivityRow {
   type: Activity["type"];
-  at: string | null;
+  // pg parses timestamptz columns to JS Date objects at runtime.
+  at: Date | string | null;
   posting_id: string | null;
   action: string | null;
   question: string | null;
@@ -277,14 +278,15 @@ router.post(
  * postings that actually surface, then attach them in JS preserving order.
  */
 router.get("/:id/activity", async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const rawLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
-  const limit = Number.isFinite(rawLimit)
-    ? Math.min(Math.max(rawLimit, 1), ACTIVITY_LIMIT_MAX)
-    : ACTIVITY_LIMIT_DEFAULT;
+  try {
+    const { id } = req.params;
+    const rawLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(rawLimit, 1), ACTIVITY_LIMIT_MAX)
+      : ACTIVITY_LIMIT_DEFAULT;
 
-  const combined = await pool.query<ActivityRow>(
-    `SELECT type, at, posting_id, action, question, answer
+    const combined = await pool.query<ActivityRow>(
+      `SELECT type, at, posting_id, action, question, answer
        FROM (
          SELECT 'posting_created' AS type, p.created_at AS at,
                 p.id AS posting_id, NULL::text AS action,
@@ -308,55 +310,63 @@ router.get("/:id/activity", async (req: Request, res: Response): Promise<void> =
        ) combined
       ORDER BY at DESC NULLS LAST
       LIMIT $2`,
-    [id, limit]
-  );
-
-  // Hydrate the postings referenced by posting_* entries in one round-trip.
-  const postingIds = [
-    ...new Set(
-      combined.rows
-        .map((row) => row.posting_id)
-        .filter((pid): pid is string => pid !== null)
-    ),
-  ];
-  const postingMap = new Map<string, Posting>();
-  if (postingIds.length > 0) {
-    const pr = await pool.query<Posting>(
-      "SELECT * FROM public.postings WHERE id = ANY($1)",
-      [postingIds]
+      [id, limit]
     );
-    for (const p of pr.rows) postingMap.set(p.id, p);
-  }
 
-  const activities: Activity[] = [];
-  for (const row of combined.rows) {
-    // pg returns timestamptz as a Date; serialize to ISO for a stable string.
-    const at = row.at ? new Date(row.at).toISOString() : "";
-    if (row.type === "question_answered") {
-      activities.push({
-        type: "question_answered",
-        question: row.question ?? "",
-        answer: row.answer ?? "",
-        at,
-      });
-      continue;
+    // Hydrate the postings referenced by posting_* entries in one round-trip.
+    const postingIds = [
+      ...new Set(
+        combined.rows
+          .map((row) => row.posting_id)
+          .filter((pid): pid is string => pid !== null)
+      ),
+    ];
+    const postingMap = new Map<string, Posting>();
+    if (postingIds.length > 0) {
+      const pr = await pool.query<Posting>(
+        "SELECT * FROM public.postings WHERE id = ANY($1)",
+        [postingIds]
+      );
+      for (const p of pr.rows) postingMap.set(p.id, p);
     }
-    const posting = row.posting_id ? postingMap.get(row.posting_id) : undefined;
-    // Skip entries whose posting vanished between the two queries (rare).
-    if (!posting) continue;
-    if (row.type === "posting_created") {
-      activities.push({ type: "posting_created", posting, at });
-    } else {
-      activities.push({
-        type: "posting_participated",
-        posting,
-        action: (row.action ?? "join") as ParticipantAction,
-        at,
-      });
-    }
-  }
 
-  res.json(activities);
+    const activities: Activity[] = [];
+    for (const row of combined.rows) {
+      // pg returns timestamptz as a Date; serialize to ISO for a stable string.
+      const at = row.at ? new Date(row.at).toISOString() : "";
+      if (row.type === "question_answered") {
+        activities.push({
+          type: "question_answered",
+          question: row.question ?? "",
+          answer: row.answer ?? "",
+          at,
+        });
+        continue;
+      }
+      const posting = row.posting_id ? postingMap.get(row.posting_id) : undefined;
+      // Skip entries whose posting vanished between the two queries (rare).
+      if (!posting) continue;
+      if (row.type === "posting_created") {
+        activities.push({ type: "posting_created", posting, at });
+      } else {
+        // Defensively whitelist the action so an unexpected DB value can't
+        // leak through and render as `undefined` in the client's label map.
+        const action: ParticipantAction =
+          row.action === "interested" || row.action === "online"
+            ? row.action
+            : "join";
+        activities.push({ type: "posting_participated", posting, action, at });
+      }
+    }
+
+    res.json(activities);
+  } catch (err) {
+    // A malformed :id (non-UUID) makes pg throw `invalid input syntax for
+    // type uuid`; without this catch it would surface as an unhandled
+    // rejection rather than a clean 500.
+    console.error("GET /api/profiles/:id/activity error:", err);
+    res.status(500).json({ error: "Failed to load activity" });
+  }
 });
 
 /**
