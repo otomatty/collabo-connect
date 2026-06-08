@@ -9,7 +9,10 @@ import {
 } from "../services/conversation-topics.js";
 import { CONVERSATION_TOPICS_COUNT } from "../prompts/conversation-topics.js";
 import type {
+  Activity,
   ConversationTopic,
+  ParticipantAction,
+  Posting,
   Profile,
   ProfilePublicTag,
   ProfileTagDetail,
@@ -20,6 +23,18 @@ const TOPIC_EMOJI_MAX = 16;
 const TOPIC_TITLE_MAX = 100;
 const TOPIC_DESCRIPTION_MAX = 500;
 const NICKNAME_MAX = 50;
+const ACTIVITY_LIMIT_DEFAULT = 3;
+const ACTIVITY_LIMIT_MAX = 20;
+
+/** Raw row shape returned by the activity UNION query before hydration. */
+interface ActivityRow {
+  type: Activity["type"];
+  at: string | null;
+  posting_id: string | null;
+  action: string | null;
+  question: string | null;
+  answer: string | null;
+}
 
 /**
  * Validate `conversation_topics` payload coming from PUT /api/profiles/me.
@@ -244,6 +259,105 @@ router.post(
     }
   }
 );
+
+/**
+ * GET /api/profiles/:id/activity?limit=3 - public "最近の活動" timeline.
+ *
+ * Merges three event sources into a single time-descending list so other
+ * members can spot shared experiences (same posting, same daily question):
+ *   - postings the user created            → posting_created
+ *   - postings the user joined / liked     → posting_participated
+ *   - daily AI questions the user answered → question_answered
+ *
+ * Privacy: intentionally public (no auth) — answers and participation are
+ * already visible elsewhere, matching the existing spec. `limit` is clamped to
+ * [1, ACTIVITY_LIMIT_MAX] and defaults to 3.
+ *
+ * The UNION ALL is ordered + limited in SQL so we only hydrate the few
+ * postings that actually surface, then attach them in JS preserving order.
+ */
+router.get("/:id/activity", async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const rawLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(Math.max(rawLimit, 1), ACTIVITY_LIMIT_MAX)
+    : ACTIVITY_LIMIT_DEFAULT;
+
+  const combined = await pool.query<ActivityRow>(
+    `SELECT type, at, posting_id, action, question, answer
+       FROM (
+         SELECT 'posting_created' AS type, p.created_at AS at,
+                p.id AS posting_id, NULL::text AS action,
+                NULL::text AS question, NULL::text AS answer
+           FROM public.postings p
+          WHERE p.creator_id = $1
+         UNION ALL
+         SELECT 'posting_participated' AS type, pp.created_at AS at,
+                pp.posting_id AS posting_id, pp.action AS action,
+                NULL::text AS question, NULL::text AS answer
+           FROM public.posting_participants pp
+           JOIN public.postings p2 ON p2.id = pp.posting_id
+          WHERE pp.user_id = $1 AND p2.creator_id <> $1
+         UNION ALL
+         SELECT 'question_answered' AS type, r.created_at AS at,
+                NULL::uuid AS posting_id, NULL::text AS action,
+                q.question AS question, r.answer AS answer
+           FROM public.ai_question_responses r
+           JOIN public.ai_questions q ON q.id = r.question_id
+          WHERE r.user_id = $1
+       ) combined
+      ORDER BY at DESC NULLS LAST
+      LIMIT $2`,
+    [id, limit]
+  );
+
+  // Hydrate the postings referenced by posting_* entries in one round-trip.
+  const postingIds = [
+    ...new Set(
+      combined.rows
+        .map((row) => row.posting_id)
+        .filter((pid): pid is string => pid !== null)
+    ),
+  ];
+  const postingMap = new Map<string, Posting>();
+  if (postingIds.length > 0) {
+    const pr = await pool.query<Posting>(
+      "SELECT * FROM public.postings WHERE id = ANY($1)",
+      [postingIds]
+    );
+    for (const p of pr.rows) postingMap.set(p.id, p);
+  }
+
+  const activities: Activity[] = [];
+  for (const row of combined.rows) {
+    // pg returns timestamptz as a Date; serialize to ISO for a stable string.
+    const at = row.at ? new Date(row.at).toISOString() : "";
+    if (row.type === "question_answered") {
+      activities.push({
+        type: "question_answered",
+        question: row.question ?? "",
+        answer: row.answer ?? "",
+        at,
+      });
+      continue;
+    }
+    const posting = row.posting_id ? postingMap.get(row.posting_id) : undefined;
+    // Skip entries whose posting vanished between the two queries (rare).
+    if (!posting) continue;
+    if (row.type === "posting_created") {
+      activities.push({ type: "posting_created", posting, at });
+    } else {
+      activities.push({
+        type: "posting_participated",
+        posting,
+        action: (row.action ?? "join") as ParticipantAction,
+        at,
+      });
+    }
+  }
+
+  res.json(activities);
+});
 
 /**
  * GET /api/profiles/:id/tags - public projection of a profile's tags with

@@ -15,6 +15,21 @@ export type Profile = Omit<ProfileRow, "conversation_topics"> & {
   conversation_topics: ConversationTopic[];
 };
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
+type PostingRow = Database["public"]["Tables"]["postings"]["Row"];
+
+/**
+ * One entry in the member "最近の活動" timeline. Mirrors the API's `Activity`
+ * union (`api/src/types.ts`) — keep both in sync when the shape changes.
+ */
+export type Activity =
+  | { type: "posting_created"; posting: PostingRow; at: string }
+  | {
+      type: "posting_participated";
+      posting: PostingRow;
+      action: "join" | "interested" | "online";
+      at: string;
+    }
+  | { type: "question_answered"; question: string; answer: string; at: string };
 
 /** 全プロフィールを取得 */
 export function useProfiles() {
@@ -47,6 +62,21 @@ export function useProfileTags(id: string | undefined) {
     queryFn: async () => {
       if (!id) return [];
       return apiFetch<ProfilePublicTag[]>(`/api/profiles/${id}/tags`);
+    },
+    enabled: !!id,
+  });
+}
+
+/**
+ * メンバー詳細ページの「最近の活動」タイムライン。
+ * 募集の作成/参加と AI 質問への回答を時系列降順でマージした最新 N 件を返す。
+ */
+export function useProfileActivity(id: string | undefined, limit = 3) {
+  return useQuery<Activity[]>({
+    queryKey: ["profiles", id, "activity", limit],
+    queryFn: async () => {
+      if (!id) return [];
+      return apiFetch<Activity[]>(`/api/profiles/${id}/activity?limit=${limit}`);
     },
     enabled: !!id,
   });
