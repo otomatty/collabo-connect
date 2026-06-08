@@ -10,8 +10,14 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    # Least privilege: CI only needs to read the repo to check out and run
+    # lint/typecheck/test. No step pushes, comments, or reports statuses.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
