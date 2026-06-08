@@ -48,8 +48,10 @@ create table if not exists public.postings (
 );
 
 -- Supports GET /api/profiles/:id/activity (posting_created) and the
--- creator-scoped lookups in /api/postings/mine without a full table scan.
-create index if not exists postings_creator_id_idx on public.postings (creator_id);
+-- creator-scoped lookups in /api/postings/mine. Composite with created_at DESC
+-- so `WHERE creator_id = $1 ORDER BY created_at DESC` is served index-ordered.
+create index if not exists postings_creator_created_at_idx
+  on public.postings (creator_id, created_at desc);
 
 -- ============================================
 -- 3. posting_participants (投稿への参加者)
@@ -92,11 +94,12 @@ create table if not exists public.ai_question_responses (
   unique (question_id, user_id)
 );
 
--- user_id-only lookups for GET /api/profiles/:id/activity (question_answered)
--- and GET /api/ai-question-responses/me; the (question_id, user_id) unique
--- index doesn't cover them.
-create index if not exists ai_question_responses_user_id_idx
-  on public.ai_question_responses (user_id);
+-- user_id lookups for GET /api/profiles/:id/activity (question_answered) and
+-- GET /api/ai-question-responses/me; the (question_id, user_id) unique index
+-- doesn't cover them. Composite with created_at DESC serves the latter's
+-- `WHERE user_id = $1 ORDER BY created_at DESC` without an extra sort.
+create index if not exists ai_question_responses_user_created_at_idx
+  on public.ai_question_responses (user_id, created_at desc);
 
 -- ============================================
 -- 6. tags (タグ辞書)

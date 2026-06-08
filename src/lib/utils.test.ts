@@ -70,6 +70,11 @@ describe("formatJstDate", () => {
     expect(formatJstDate("2026-06-08T03:00:00.000Z")).toBe("2026年6月8日");
   });
 
+  it("年跨ぎの境界（年末UTC→翌年JST）を正しく変換する", () => {
+    // 2026-12-31T15:30:00Z = 2027-01-01 00:30 JST → 翌年として表示する
+    expect(formatJstDate("2026-12-31T15:30:00.000Z")).toBe("2027年1月1日");
+  });
+
   it("値がない・不正な場合は空文字を返す", () => {
     expect(formatJstDate(null)).toBe("");
     expect(formatJstDate(undefined)).toBe("");
