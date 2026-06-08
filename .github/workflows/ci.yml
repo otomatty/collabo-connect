@@ -7,8 +7,8 @@ on:
     branches: [main, master, develop]
 
 jobs:
-  lint:
-    name: Lint
+  ci:
+    name: CI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,38 +16,17 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      # Single install for the whole job so setup-bun downloads the runtime once
+      # per run (instead of once per job), reducing exposure to transient
+      # GitHub-releases 504s on the Bun/CLI download.
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run ESLint
         run: bun run lint
 
-  typecheck:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
       - name: Run TypeScript type check
         run: bun run typecheck
-
-  test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run unit tests
         run: bun run test
