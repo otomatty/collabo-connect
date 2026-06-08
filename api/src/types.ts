@@ -132,6 +132,25 @@ export interface PostingWithDetails extends Posting {
   participants: (PostingParticipant & { profile: Profile | null })[];
 }
 
+/** Participation action recorded in `posting_participants.action`. */
+export type ParticipantAction = "join" | "interested" | "online";
+
+/**
+ * One entry in the "最近の活動" timeline returned by
+ * GET /api/profiles/:id/activity. A discriminated union over the three event
+ * sources (created posting / participated posting / answered question), each
+ * carrying an ISO `at` timestamp used to order the merged list.
+ */
+export type Activity =
+  | { type: "posting_created"; posting: Posting; at: string }
+  | {
+      type: "posting_participated";
+      posting: Posting;
+      action: ParticipantAction;
+      at: string;
+    }
+  | { type: "question_answered"; question: string; answer: string; at: string };
+
 /** Extend Express Request with optional userId (set by auth middleware). Module augmentation (no namespace). */
 import type {} from "express";
 declare module "express-serve-static-core" {

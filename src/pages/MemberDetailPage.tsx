@@ -10,8 +10,9 @@ import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import CommonGroundCard from "@/components/CommonGroundCard";
 import ConversationTopicsCard from "@/components/ConversationTopicsCard";
+import RecentActivityList from "@/components/RecentActivityList";
 import { useAuth } from "@/hooks/useAuth";
-import { useProfile, useProfileTags } from "@/hooks/useProfiles";
+import { useProfile, useProfileTags, useProfileActivity } from "@/hooks/useProfiles";
 import { formatJoinedDate } from "@/lib/utils";
 import type { ProfilePublicTag, TagCategory } from "@/types/tags";
 
@@ -47,6 +48,11 @@ export default function MemberDetailPage() {
   const { user: viewer, profile: viewerProfile, loading: isAuthLoading } = useAuth();
   const { data: user, isLoading } = useProfile(id);
   const { data: profileTags, isLoading: isTagsLoading } = useProfileTags(id);
+  const {
+    data: activity,
+    isLoading: isActivityLoading,
+    isError: isActivityError,
+  } = useProfileActivity(id);
   const isOwnProfile = !!viewer?.id && viewer.id === id;
 
   const groupedTags = useMemo(() => groupTagsByCategory(profileTags), [profileTags]);
@@ -164,11 +170,15 @@ export default function MemberDetailPage() {
       {/* 5. 最近の活動 (#18) */}
       <section>
         <h2 className="text-sm font-semibold mb-2">最近の活動</h2>
-        <Card className="border-dashed">
-          <CardContent className="p-4 text-sm text-muted-foreground">
-            最近の募集・回答タイムラインは近日公開予定です（Coming Soon）。
-          </CardContent>
-        </Card>
+        {isActivityLoading ? (
+          <p className="text-sm text-muted-foreground">読み込み中...</p>
+        ) : isActivityError ? (
+          <p className="text-sm text-destructive">
+            活動情報の読み込みに失敗しました。
+          </p>
+        ) : (
+          <RecentActivityList activities={activity ?? []} />
+        )}
       </section>
 
       {/* 6. AI 自己紹介 */}
