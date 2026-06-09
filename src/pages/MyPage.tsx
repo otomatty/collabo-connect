@@ -528,6 +528,9 @@ export default function MyPage() {
                       <Input
                         value={topic.title}
                         onChange={(e) => handleTopicChange(idx, "title", e.target.value)}
+                        // API の TOPIC_TITLE_MAX に合わせる。超過すると PUT が 400 を
+                        // 返し、他フィールドの編集まで保存に失敗するため入力段階で制限。
+                        maxLength={100}
                         placeholder="タイトル（例: ラーメン巡り）"
                         aria-label={`トピック${idx + 1}のタイトル`}
                         className="flex-1"
@@ -546,6 +549,8 @@ export default function MyPage() {
                     <Textarea
                       value={topic.description}
                       onChange={(e) => handleTopicChange(idx, "description", e.target.value)}
+                      // API の TOPIC_DESCRIPTION_MAX に合わせる（超過は 400 になる）。
+                      maxLength={500}
                       placeholder="補足（任意・例: 新宿で月5回は通うらしい）"
                       aria-label={`トピック${idx + 1}の説明`}
                       rows={2}
