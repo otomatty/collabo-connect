@@ -9,12 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
+import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus, Loader2, Trash2 } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import SuggestedTagsSheet from "@/components/SuggestedTagsSheet";
 import { useAuth } from "@/hooks/useAuth";
-import { useMyProfileTagDetails, useUpdateProfile } from "@/hooks/useProfiles";
+import {
+  useMyProfileTagDetails,
+  useUpdateProfile,
+  useRegenerateConversationTopics,
+} from "@/hooks/useProfiles";
+import { CONVERSATION_TOPICS_MAX, type ConversationTopic } from "@/types/profile";
 import { useMyPostings } from "@/hooks/usePostings";
 import { useMyResponses } from "@/hooks/useAIQuestions";
 import { useSuggestedTags } from "@/hooks/useSuggestedTags";
@@ -30,10 +35,24 @@ import { formatJoinedDate } from "@/lib/utils";
  */
 const NEW_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * 編集フォーム内のトピックは安定した `_id` を持たせてリストの key に使う。
+ * `key={index}` だと中間トピックの追加・削除で React の差分検出がずれ、
+ * 入力フォーカスや値が別の行に紐づいて見える不具合が起きうるため。
+ * `_id` は UI 専用で、保存時は API へ送らない（ConversationTopic に戻す）。
+ */
+type TopicDraft = ConversationTopic & { _id: string };
+
+const withTopicId = (topic: ConversationTopic): TopicDraft => ({
+  ...topic,
+  _id: crypto.randomUUID(),
+});
+
 export default function MyPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, setProfile } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("mypage");
   const updateProfile = useUpdateProfile();
+  const regenerateTopics = useRegenerateConversationTopics();
   const { data: myPostings } = useMyPostings(user?.id);
   const { data: myResponses } = useMyResponses(user?.id);
   const { data: suggestedTags } = useSuggestedTags(user?.id);
@@ -43,6 +62,7 @@ export default function MyPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [role, setRole] = useState("");
   const [jobType, setJobType] = useState("");
   const [areas, setAreas] = useState<string[]>([]);
@@ -50,6 +70,7 @@ export default function MyPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [aiIntro, setAiIntro] = useState("");
+  const [topics, setTopics] = useState<TopicDraft[]>([]);
 
   const pendingCount = suggestedTags?.length ?? 0;
   // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
@@ -70,32 +91,134 @@ export default function MyPage() {
     return names;
   }, [tagDetails]);
 
-  // プロフィールデータをフォームに反映
+  // プロフィールデータをフォームに反映。編集中（isEditing）は同期しない。
+  // profile が再取得（タブ復帰時の refetch 等）で更新されても、未保存の
+  // 編集内容を上書きしないようにするため。編集を閉じた時点で最新値へ戻す。
   useEffect(() => {
-    if (profile) {
+    if (profile && !isEditing) {
       setName(profile.name);
+      setNickname(profile.nickname ?? "");
       setRole(profile.role);
       setJobType(profile.job_type || "");
       setAreas(profile.areas);
       setTags(profile.tags);
       setAiIntro(profile.ai_intro);
+      setTopics((profile.conversation_topics ?? []).map(withTopicId));
     }
-  }, [profile]);
+  }, [profile, isEditing]);
 
   const handleSave = () => {
     if (!user) return;
+    // 再生成中は保存をブロック（生成完了で topics が上書きされるため）。
+    if (regenerateTopics.isPending) return;
+
+    // 完全に空のドラフト（追加だけして未入力）は送らない。残ったトピックに
+    // title が無いと API が 400 を返すので、ここで弾いてユーザーに知らせる。
+    // 併せて UI 専用の `_id` を落として API の ConversationTopic 形に戻す。
+    const activeTopics: ConversationTopic[] = topics
+      .filter((t) => t.emoji.trim() || t.title.trim() || t.description.trim())
+      .map(({ emoji, title, description }) => ({ emoji, title, description }));
+    if (activeTopics.some((t) => !t.title.trim())) {
+      toast.error("会話のきっかけのタイトルを入力してください");
+      return;
+    }
+
     updateProfile.mutate(
       {
         id: user.id,
-        updates: { name, role, job_type: jobType, areas, tags, ai_intro: aiIntro },
+        updates: {
+          name,
+          nickname,
+          role,
+          job_type: jobType,
+          areas,
+          tags,
+          ai_intro: aiIntro,
+          conversation_topics: activeTopics,
+        },
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          // useAuth の profile はローカル state で、useUpdateProfile の
+          // React Query キャッシュ更新では同期されない。保存値を反映しないと
+          // ダイアログを閉じた直後に同期 useEffect が古い profile でフォームを
+          // 巻き戻してしまうため、ここで明示的に更新する。
+          if (data) setProfile(data);
           setIsEditing(false);
           toast.success("プロフィールを更新しました");
         },
+        onError: () => {
+          toast.error("プロフィールの更新に失敗しました");
+        },
       }
     );
+  };
+
+  const handleTopicChange = (
+    index: number,
+    field: keyof ConversationTopic,
+    value: string
+  ) => {
+    setTopics((prev) =>
+      prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
+    );
+  };
+
+  const handleAddTopic = () => {
+    // 上限判定は functional update 内の prev.length で行う。外側の topics を
+    // 見ると、上限手前での連打で複数の追加がキューされ上限を超えうるため。
+    setTopics((prev) => {
+      if (prev.length >= CONVERSATION_TOPICS_MAX) return prev;
+      return [...prev, withTopicId({ emoji: "", title: "", description: "" })];
+    });
+  };
+
+  const handleRemoveTopic = (index: number) => {
+    setTopics((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // 編集中フォームが保存済み profile と異なるか（topics 以外）。再生成は
+  // サーバ側で「保存済み」プロフィールを元に生成するため、未保存の編集が
+  // あると古い内容で生成されてしまう。それを防ぐためのダーティチェック。
+  const hasUnsavedProfileChanges = () => {
+    if (!profile) return false;
+    // タグ/エリアは保存時にサーバ側で並び順が変わりうるので順序非依存で比較。
+    const sameSet = (a: string[], b: string[]) => {
+      if (a.length !== b.length) return false;
+      const setB = new Set(b);
+      return a.every((v) => setB.has(v));
+    };
+    return (
+      name !== profile.name ||
+      nickname !== (profile.nickname ?? "") ||
+      role !== profile.role ||
+      jobType !== (profile.job_type || "") ||
+      aiIntro !== profile.ai_intro ||
+      !sameSet(areas, profile.areas ?? []) ||
+      !sameSet(tags, profile.tags ?? [])
+    );
+  };
+
+  const handleRegenerateTopics = () => {
+    // 未保存の変更があると AI が古いプロフィールで生成するため、先に保存を促す。
+    if (hasUnsavedProfileChanges()) {
+      toast.error("プロフィールの変更を保存してから再生成してください");
+      return;
+    }
+    regenerateTopics.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data) {
+          setTopics((data.conversation_topics ?? []).map(withTopicId));
+          // 再生成は即 DB 保存される。profile も同期して、続く再生成の
+          // ダーティチェックが誤検知しないようにする。
+          setProfile(data);
+        }
+        toast.success("会話のきっかけを再生成しました");
+      },
+      onError: () => {
+        toast.error("再生成に失敗しました。しばらくしてからお試しください");
+      },
+    });
   };
 
   const handleAddTag = () => {
@@ -248,6 +371,17 @@ export default function MyPage() {
             </div>
 
             <div className="space-y-1.5">
+              <label className="text-sm font-medium">ニックネーム</label>
+              <Input
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={20}
+                placeholder="社内で呼ばれている名前（例: たくみん）"
+              />
+              <p className="text-xs text-muted-foreground">任意・20文字以内</p>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">役職</label>
               <Input value={role} onChange={(e) => setRole(e.target.value)} />
             </div>
@@ -364,11 +498,106 @@ export default function MyPage() {
               <label className="text-sm font-medium">自己紹介</label>
               <Textarea value={aiIntro} onChange={(e) => setAiIntro(e.target.value)} rows={4} />
             </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">会話のきっかけ</label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleRegenerateTopics}
+                  disabled={regenerateTopics.isPending}
+                >
+                  {regenerateTopics.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AIで再生成
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                相手が話しかけやすい話題を最大{CONVERSATION_TOPICS_MAX}件まで設定できます
+              </p>
+
+              <div className="space-y-3">
+                {topics.map((topic, idx) => (
+                  <div key={topic._id} className="rounded-lg border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={topic.emoji}
+                        onChange={(e) => handleTopicChange(idx, "emoji", e.target.value)}
+                        maxLength={16}
+                        placeholder="🍜"
+                        aria-label={`トピック${idx + 1}の絵文字`}
+                        className="w-14 text-center text-lg shrink-0"
+                      />
+                      <Input
+                        value={topic.title}
+                        onChange={(e) => handleTopicChange(idx, "title", e.target.value)}
+                        // API の TOPIC_TITLE_MAX に合わせる。超過すると PUT が 400 を
+                        // 返し、他フィールドの編集まで保存に失敗するため入力段階で制限。
+                        maxLength={100}
+                        placeholder="タイトル（例: ラーメン巡り）"
+                        aria-label={`トピック${idx + 1}のタイトル`}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveTopic(idx)}
+                        aria-label={`トピック${idx + 1}を削除`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={topic.description}
+                      onChange={(e) => handleTopicChange(idx, "description", e.target.value)}
+                      // API の TOPIC_DESCRIPTION_MAX に合わせる（超過は 400 になる）。
+                      maxLength={500}
+                      placeholder="補足（任意・例: 新宿で月5回は通うらしい）"
+                      aria-label={`トピック${idx + 1}の説明`}
+                      rows={2}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {topics.length < CONVERSATION_TOPICS_MAX ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5"
+                  onClick={handleAddTopic}
+                >
+                  <Plus className="h-4 w-4" />
+                  トピックを追加
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center">
+                  トピックは最大{CONVERSATION_TOPICS_MAX}件までです
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsEditing(false)}>キャンセル</Button>
-            <Button onClick={handleSave} disabled={updateProfile.isPending}>
+            <Button
+              onClick={handleSave}
+              disabled={updateProfile.isPending || regenerateTopics.isPending}
+            >
               {updateProfile.isPending ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>

@@ -14,7 +14,18 @@ type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 export type Profile = Omit<ProfileRow, "conversation_topics"> & {
   conversation_topics: ConversationTopic[];
 };
-type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
+/**
+ * API-shaped Profile update: same as the generated `Update`, but with
+ * `conversation_topics` narrowed from `Json` to `ConversationTopic[]` so call
+ * sites can pass the parsed array without casting. The `/api/profiles/me`
+ * endpoint validates and persists it as jsonb.
+ */
+type ProfileUpdate = Omit<
+  Database["public"]["Tables"]["profiles"]["Update"],
+  "conversation_topics"
+> & {
+  conversation_topics?: ConversationTopic[];
+};
 type PostingRow = Database["public"]["Tables"]["postings"]["Row"];
 
 /**
@@ -112,6 +123,36 @@ export function useUpdateProfile() {
       return apiFetch<Profile>("/api/profiles/me", {
         method: "PUT",
         body: updates,
+      });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      if (data) {
+        queryClient.setQueryData(["profiles", data.id], data);
+      }
+    },
+  });
+}
+
+/**
+ * 会話のきっかけ（conversation_topics）を Gemini で再生成する。
+ *
+ * `POST /api/profiles/me/conversation-topics/regenerate` を叩き、更新後の
+ * Profile を返す。サーバ側で生成に成功した場合のみ DB が書き換わるため、
+ * 失敗時（502/500）は既存値が保持される。
+ *
+ * MyPage の編集フォームは「再生成」を押した時点ではローカル state のみを
+ * 更新し、ユーザーが「保存」を押すまで DB へ反映しない想定 …… だが本
+ * エンドポイントはサーバ側で即保存する仕様。返ってきた最新トピックで
+ * フォーム値を上書きし、続けてユーザーが他項目を編集→保存できるようにする。
+ */
+export function useRegenerateConversationTopics() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      return apiFetch<Profile>("/api/profiles/me/conversation-topics/regenerate", {
+        method: "POST",
       });
     },
     onSuccess: (data) => {
