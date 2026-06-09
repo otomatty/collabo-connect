@@ -36,7 +36,7 @@ import { formatJoinedDate } from "@/lib/utils";
 const NEW_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export default function MyPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, setProfile } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("mypage");
   const updateProfile = useUpdateProfile();
   const regenerateTopics = useRegenerateConversationTopics();
@@ -124,7 +124,12 @@ export default function MyPage() {
         },
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          // useAuth の profile はローカル state で、useUpdateProfile の
+          // React Query キャッシュ更新では同期されない。保存値を反映しないと
+          // ダイアログを閉じた直後に同期 useEffect が古い profile でフォームを
+          // 巻き戻してしまうため、ここで明示的に更新する。
+          if (data) setProfile(data);
           setIsEditing(false);
           toast.success("プロフィールを更新しました");
         },
@@ -158,11 +163,41 @@ export default function MyPage() {
     setTopics((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // 編集中フォームが保存済み profile と異なるか（topics 以外）。再生成は
+  // サーバ側で「保存済み」プロフィールを元に生成するため、未保存の編集が
+  // あると古い内容で生成されてしまう。それを防ぐためのダーティチェック。
+  const hasUnsavedProfileChanges = () => {
+    if (!profile) return false;
+    // タグ/エリアは保存時にサーバ側で並び順が変わりうるので順序非依存で比較。
+    const sameSet = (a: string[], b: string[]) => {
+      if (a.length !== b.length) return false;
+      const setB = new Set(b);
+      return a.every((v) => setB.has(v));
+    };
+    return (
+      name !== profile.name ||
+      nickname !== (profile.nickname ?? "") ||
+      role !== profile.role ||
+      jobType !== (profile.job_type || "") ||
+      aiIntro !== profile.ai_intro ||
+      !sameSet(areas, profile.areas ?? []) ||
+      !sameSet(tags, profile.tags ?? [])
+    );
+  };
+
   const handleRegenerateTopics = () => {
+    // 未保存の変更があると AI が古いプロフィールで生成するため、先に保存を促す。
+    if (hasUnsavedProfileChanges()) {
+      toast.error("プロフィールの変更を保存してから再生成してください");
+      return;
+    }
     regenerateTopics.mutate(undefined, {
       onSuccess: (data) => {
         if (data) {
           setTopics(data.conversation_topics ?? []);
+          // 再生成は即 DB 保存される。profile も同期して、続く再生成の
+          // ダーティチェックが誤検知しないようにする。
+          setProfile(data);
         }
         toast.success("会話のきっかけを再生成しました");
       },
