@@ -35,6 +35,19 @@ import { formatJoinedDate } from "@/lib/utils";
  */
 const NEW_TAG_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * 編集フォーム内のトピックは安定した `_id` を持たせてリストの key に使う。
+ * `key={index}` だと中間トピックの追加・削除で React の差分検出がずれ、
+ * 入力フォーカスや値が別の行に紐づいて見える不具合が起きうるため。
+ * `_id` は UI 専用で、保存時は API へ送らない（ConversationTopic に戻す）。
+ */
+type TopicDraft = ConversationTopic & { _id: string };
+
+const withTopicId = (topic: ConversationTopic): TopicDraft => ({
+  ...topic,
+  _id: crypto.randomUUID(),
+});
+
 export default function MyPage() {
   const { user, profile, setProfile } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("mypage");
@@ -57,7 +70,7 @@ export default function MyPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [aiIntro, setAiIntro] = useState("");
-  const [topics, setTopics] = useState<ConversationTopic[]>([]);
+  const [topics, setTopics] = useState<TopicDraft[]>([]);
 
   const pendingCount = suggestedTags?.length ?? 0;
   // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
@@ -90,7 +103,7 @@ export default function MyPage() {
       setAreas(profile.areas);
       setTags(profile.tags);
       setAiIntro(profile.ai_intro);
-      setTopics(profile.conversation_topics ?? []);
+      setTopics((profile.conversation_topics ?? []).map(withTopicId));
     }
   }, [profile, isEditing]);
 
@@ -101,9 +114,10 @@ export default function MyPage() {
 
     // 完全に空のドラフト（追加だけして未入力）は送らない。残ったトピックに
     // title が無いと API が 400 を返すので、ここで弾いてユーザーに知らせる。
-    const activeTopics = topics.filter(
-      (t) => t.emoji.trim() || t.title.trim() || t.description.trim()
-    );
+    // 併せて UI 専用の `_id` を落として API の ConversationTopic 形に戻す。
+    const activeTopics: ConversationTopic[] = topics
+      .filter((t) => t.emoji.trim() || t.title.trim() || t.description.trim())
+      .map(({ emoji, title, description }) => ({ emoji, title, description }));
     if (activeTopics.some((t) => !t.title.trim())) {
       toast.error("会話のきっかけのタイトルを入力してください");
       return;
@@ -155,7 +169,7 @@ export default function MyPage() {
     // 見ると、上限手前での連打で複数の追加がキューされ上限を超えうるため。
     setTopics((prev) => {
       if (prev.length >= CONVERSATION_TOPICS_MAX) return prev;
-      return [...prev, { emoji: "", title: "", description: "" }];
+      return [...prev, withTopicId({ emoji: "", title: "", description: "" })];
     });
   };
 
@@ -194,7 +208,7 @@ export default function MyPage() {
     regenerateTopics.mutate(undefined, {
       onSuccess: (data) => {
         if (data) {
-          setTopics(data.conversation_topics ?? []);
+          setTopics((data.conversation_topics ?? []).map(withTopicId));
           // 再生成は即 DB 保存される。profile も同期して、続く再生成の
           // ダーティチェックが誤検知しないようにする。
           setProfile(data);
@@ -515,7 +529,7 @@ export default function MyPage() {
 
               <div className="space-y-3">
                 {topics.map((topic, idx) => (
-                  <div key={idx} className="rounded-lg border p-3 space-y-2">
+                  <div key={topic._id} className="rounded-lg border p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <Input
                         value={topic.emoji}
