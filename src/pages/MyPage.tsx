@@ -9,12 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus } from "lucide-react";
+import { MessageSquare, ClipboardList, Sparkles, Pencil, X, Plus, Loader2, Trash2 } from "lucide-react";
 import UserAvatar from "@/components/UserAvatar";
 import AppHeader from "@/components/AppHeader";
 import SuggestedTagsSheet from "@/components/SuggestedTagsSheet";
 import { useAuth } from "@/hooks/useAuth";
-import { useMyProfileTagDetails, useUpdateProfile } from "@/hooks/useProfiles";
+import {
+  useMyProfileTagDetails,
+  useUpdateProfile,
+  useRegenerateConversationTopics,
+} from "@/hooks/useProfiles";
+import { CONVERSATION_TOPICS_MAX, type ConversationTopic } from "@/types/profile";
 import { useMyPostings } from "@/hooks/usePostings";
 import { useMyResponses } from "@/hooks/useAIQuestions";
 import { useSuggestedTags } from "@/hooks/useSuggestedTags";
@@ -34,6 +39,7 @@ export default function MyPage() {
   const { user, profile } = useAuth();
   const { shouldShow: showGuide, dismiss } = useGuide("mypage");
   const updateProfile = useUpdateProfile();
+  const regenerateTopics = useRegenerateConversationTopics();
   const { data: myPostings } = useMyPostings(user?.id);
   const { data: myResponses } = useMyResponses(user?.id);
   const { data: suggestedTags } = useSuggestedTags(user?.id);
@@ -43,6 +49,7 @@ export default function MyPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [role, setRole] = useState("");
   const [jobType, setJobType] = useState("");
   const [areas, setAreas] = useState<string[]>([]);
@@ -50,6 +57,7 @@ export default function MyPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [aiIntro, setAiIntro] = useState("");
+  const [topics, setTopics] = useState<ConversationTopic[]>([]);
 
   const pendingCount = suggestedTags?.length ?? 0;
   // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
@@ -74,11 +82,13 @@ export default function MyPage() {
   useEffect(() => {
     if (profile) {
       setName(profile.name);
+      setNickname(profile.nickname ?? "");
       setRole(profile.role);
       setJobType(profile.job_type || "");
       setAreas(profile.areas);
       setTags(profile.tags);
       setAiIntro(profile.ai_intro);
+      setTopics(profile.conversation_topics ?? []);
     }
   }, [profile]);
 
@@ -87,7 +97,16 @@ export default function MyPage() {
     updateProfile.mutate(
       {
         id: user.id,
-        updates: { name, role, job_type: jobType, areas, tags, ai_intro: aiIntro },
+        updates: {
+          name,
+          nickname,
+          role,
+          job_type: jobType,
+          areas,
+          tags,
+          ai_intro: aiIntro,
+          conversation_topics: topics,
+        },
       },
       {
         onSuccess: () => {
@@ -96,6 +115,39 @@ export default function MyPage() {
         },
       }
     );
+  };
+
+  const handleTopicChange = (
+    index: number,
+    field: keyof ConversationTopic,
+    value: string
+  ) => {
+    setTopics((prev) =>
+      prev.map((t, i) => (i === index ? { ...t, [field]: value } : t))
+    );
+  };
+
+  const handleAddTopic = () => {
+    if (topics.length >= CONVERSATION_TOPICS_MAX) return;
+    setTopics((prev) => [...prev, { emoji: "", title: "", description: "" }]);
+  };
+
+  const handleRemoveTopic = (index: number) => {
+    setTopics((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRegenerateTopics = () => {
+    regenerateTopics.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data) {
+          setTopics(data.conversation_topics ?? []);
+        }
+        toast.success("会話のきっかけを再生成しました");
+      },
+      onError: () => {
+        toast.error("再生成に失敗しました。しばらくしてからお試しください");
+      },
+    });
   };
 
   const handleAddTag = () => {
@@ -248,6 +300,17 @@ export default function MyPage() {
             </div>
 
             <div className="space-y-1.5">
+              <label className="text-sm font-medium">ニックネーム</label>
+              <Input
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                maxLength={20}
+                placeholder="社内で呼ばれている名前（例: たくみん）"
+              />
+              <p className="text-xs text-muted-foreground">任意・20文字以内</p>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-sm font-medium">役職</label>
               <Input value={role} onChange={(e) => setRole(e.target.value)} />
             </div>
@@ -363,6 +426,93 @@ export default function MyPage() {
             <div className="space-y-1.5">
               <label className="text-sm font-medium">自己紹介</label>
               <Textarea value={aiIntro} onChange={(e) => setAiIntro(e.target.value)} rows={4} />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">会話のきっかけ</label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={handleRegenerateTopics}
+                  disabled={regenerateTopics.isPending}
+                >
+                  {regenerateTopics.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      AIで再生成
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                相手が話しかけやすい話題を最大{CONVERSATION_TOPICS_MAX}件まで設定できます
+              </p>
+
+              <div className="space-y-3">
+                {topics.map((topic, idx) => (
+                  <div key={idx} className="rounded-lg border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={topic.emoji}
+                        onChange={(e) => handleTopicChange(idx, "emoji", e.target.value)}
+                        maxLength={2}
+                        placeholder="🍜"
+                        aria-label={`トピック${idx + 1}の絵文字`}
+                        className="w-14 text-center text-lg shrink-0"
+                      />
+                      <Input
+                        value={topic.title}
+                        onChange={(e) => handleTopicChange(idx, "title", e.target.value)}
+                        placeholder="タイトル（例: ラーメン巡り）"
+                        aria-label={`トピック${idx + 1}のタイトル`}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveTopic(idx)}
+                        aria-label={`トピック${idx + 1}を削除`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      value={topic.description}
+                      onChange={(e) => handleTopicChange(idx, "description", e.target.value)}
+                      placeholder="補足（任意・例: 新宿で月5回は通うらしい）"
+                      aria-label={`トピック${idx + 1}の説明`}
+                      rows={2}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {topics.length < CONVERSATION_TOPICS_MAX ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5"
+                  onClick={handleAddTopic}
+                >
+                  <Plus className="h-4 w-4" />
+                  トピックを追加
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center">
+                  トピックは最大{CONVERSATION_TOPICS_MAX}件までです
+                </p>
+              )}
             </div>
           </div>
 
