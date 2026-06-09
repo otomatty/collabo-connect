@@ -78,9 +78,11 @@ export default function MyPage() {
     return names;
   }, [tagDetails]);
 
-  // プロフィールデータをフォームに反映
+  // プロフィールデータをフォームに反映。編集中（isEditing）は同期しない。
+  // profile が再取得（タブ復帰時の refetch 等）で更新されても、未保存の
+  // 編集内容を上書きしないようにするため。編集を閉じた時点で最新値へ戻す。
   useEffect(() => {
-    if (profile) {
+    if (profile && !isEditing) {
       setName(profile.name);
       setNickname(profile.nickname ?? "");
       setRole(profile.role);
@@ -90,10 +92,23 @@ export default function MyPage() {
       setAiIntro(profile.ai_intro);
       setTopics(profile.conversation_topics ?? []);
     }
-  }, [profile]);
+  }, [profile, isEditing]);
 
   const handleSave = () => {
     if (!user) return;
+    // 再生成中は保存をブロック（生成完了で topics が上書きされるため）。
+    if (regenerateTopics.isPending) return;
+
+    // 完全に空のドラフト（追加だけして未入力）は送らない。残ったトピックに
+    // title が無いと API が 400 を返すので、ここで弾いてユーザーに知らせる。
+    const activeTopics = topics.filter(
+      (t) => t.emoji.trim() || t.title.trim() || t.description.trim()
+    );
+    if (activeTopics.some((t) => !t.title.trim())) {
+      toast.error("会話のきっかけのタイトルを入力してください");
+      return;
+    }
+
     updateProfile.mutate(
       {
         id: user.id,
@@ -105,13 +120,16 @@ export default function MyPage() {
           areas,
           tags,
           ai_intro: aiIntro,
-          conversation_topics: topics,
+          conversation_topics: activeTopics,
         },
       },
       {
         onSuccess: () => {
           setIsEditing(false);
           toast.success("プロフィールを更新しました");
+        },
+        onError: () => {
+          toast.error("プロフィールの更新に失敗しました");
         },
       }
     );
@@ -128,8 +146,12 @@ export default function MyPage() {
   };
 
   const handleAddTopic = () => {
-    if (topics.length >= CONVERSATION_TOPICS_MAX) return;
-    setTopics((prev) => [...prev, { emoji: "", title: "", description: "" }]);
+    // 上限判定は functional update 内の prev.length で行う。外側の topics を
+    // 見ると、上限手前での連打で複数の追加がキューされ上限を超えうるため。
+    setTopics((prev) => {
+      if (prev.length >= CONVERSATION_TOPICS_MAX) return prev;
+      return [...prev, { emoji: "", title: "", description: "" }];
+    });
   };
 
   const handleRemoveTopic = (index: number) => {
@@ -463,7 +485,7 @@ export default function MyPage() {
                       <Input
                         value={topic.emoji}
                         onChange={(e) => handleTopicChange(idx, "emoji", e.target.value)}
-                        maxLength={2}
+                        maxLength={16}
                         placeholder="🍜"
                         aria-label={`トピック${idx + 1}の絵文字`}
                         className="w-14 text-center text-lg shrink-0"
@@ -518,7 +540,10 @@ export default function MyPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsEditing(false)}>キャンセル</Button>
-            <Button onClick={handleSave} disabled={updateProfile.isPending}>
+            <Button
+              onClick={handleSave}
+              disabled={updateProfile.isPending || regenerateTopics.isPending}
+            >
               {updateProfile.isPending ? "保存中..." : "保存"}
             </Button>
           </DialogFooter>
