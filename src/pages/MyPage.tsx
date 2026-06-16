@@ -223,13 +223,18 @@ export default function MyPage() {
   };
 
   const handleAddTag = () => {
-    // Store the canonical name only. The leading "#" is a display affordance
-    // added at render time (see the Badge below). Persisting "#React" would
-    // diverge from auto-applied / AI-proposed tags that are stored as "React",
-    // splitting search and usage_count — see issue #25. The backend
-    // normalizeTagName also strips a stray "#", so this is defense in depth.
-    const tag = newTag.trim().replace(/^[#＃]+\s*/, "");
-    if (tag && !tags.includes(tag)) {
+    // Mirror the backend normalizeTagName (api/src/services/tags.ts) exactly so
+    // the optimistic UI state matches what gets persisted: strip a leading
+    // "#"/"＃" marker + whitespace, trim, then collapse internal whitespace.
+    // The "#" is display-only (added by the Badge); persisting it would split
+    // "#React"/"React" — see issue #25.
+    const tag = newTag
+      .replace(/^[#＃\s]+/, "")
+      .trim()
+      .replace(/\s+/g, " ");
+    // Case-insensitive dedupe to match the backend's case-insensitive tag
+    // uniqueness (upsertTag resolves "React"/"react" to a single row).
+    if (tag && !tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
       setTags([...tags, tag]);
       setNewTag("");
     }
