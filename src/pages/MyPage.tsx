@@ -74,8 +74,9 @@ export default function MyPage() {
 
   const pendingCount = suggestedTags?.length ?? 0;
   // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
-  // 同じ文字列。`tagDetails[].name` も同じ tags.name 由来なので、prefix の
-  // 加工なしで一致する。useMemo で再計算を抑制。
+  // 同じ canonical 名（`#` なし）。`tagDetails[].name` も同じ tags.name 由来
+  // なので、表示用の `#` を付ける前のこの段階で素直に一致する。`#` は描画時に
+  // Badge 側で付与するだけ（issue #25）。useMemo で再計算を抑制。
   const newTagNames = useMemo(() => {
     if (!tagDetails) return new Set<string>();
     const cutoff = Date.now() - NEW_TAG_WINDOW_MS;
@@ -222,9 +223,14 @@ export default function MyPage() {
   };
 
   const handleAddTag = () => {
-    const tag = newTag.trim();
+    // Store the canonical name only. The leading "#" is a display affordance
+    // added at render time (see the Badge below). Persisting "#React" would
+    // diverge from auto-applied / AI-proposed tags that are stored as "React",
+    // splitting search and usage_count — see issue #25. The backend
+    // normalizeTagName also strips a stray "#", so this is defense in depth.
+    const tag = newTag.trim().replace(/^[#＃]+\s*/, "");
     if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag.startsWith("#") ? tag : `#${tag}`]);
+      setTags([...tags, tag]);
       setNewTag("");
     }
   };
@@ -274,7 +280,7 @@ export default function MyPage() {
                 variant="secondary"
                 className="rounded-full text-xs font-normal flex items-center gap-1"
               >
-                {tag}
+                #{tag}
                 {isNew ? (
                   <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold leading-none text-accent-foreground">
                     NEW
@@ -469,7 +475,7 @@ export default function MyPage() {
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="rounded-full flex items-center gap-1 pr-1 text-xs font-normal">
-                    {tag}
+                    #{tag}
                     <button
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
