@@ -11,9 +11,9 @@
     "db:seed": "node scripts/run-seed.mjs"
   },
   "dependencies": {
-    "better-auth": "^1.5.5",
+    "better-auth": "^1.6.2",
     "cors": "^2.8.5",
-    "express": "^4.21.0",
+    "express": "^4.22.2",
     "pg": "^8.13.0"
   },
   "devDependencies": {
@@ -21,7 +21,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.6",
-    "tsx": "^4.19.2",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.2"
   }
 }
