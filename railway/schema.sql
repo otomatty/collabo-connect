@@ -237,6 +237,98 @@ begin
 end $$;
 
 -- ============================================
+-- Migration: タグ名の `#`/`＃` プレフィックスを剥がして正規化 (issue #25)
+-- ============================================
+-- 旧 MyPage#handleAddTag は手動タグへ `#` を付けて保存していたため、AIエージェント
+-- や検索が使う canonical 名（`React`）と `#React` が別行として共存しうる。
+-- normalizeTagName の新しい挙動に合わせ、既存データを canonical 名へマージする。
+-- profile_tags / suggested_tags を付け替えてから usage_count を再計算する。
+-- 冪等: 先頭が `#`/`＃` の行が無ければ何もしない（再実行・新規環境では no-op）。
+do $$
+declare
+  rec record;
+  canonical_name text;
+  canonical_id uuid;
+  affected boolean := false;
+begin
+  for rec in
+    select id, name, category, created_by
+      from public.tags
+     where name ~ '^[#＃\s]*[#＃]'
+  loop
+    -- normalizeTagName と同じ正規化: 先頭の `#`/`＃`+空白を剥がし、
+    -- 内部空白を 1 つに畳む。
+    canonical_name := btrim(
+      regexp_replace(regexp_replace(rec.name, '^[#＃\s]+', ''), '\s+', ' ', 'g')
+    );
+
+    -- "#" だけ等で中身が空になった行は canonical を作らず破棄する。
+    if canonical_name = '' then
+      delete from public.suggested_tags where tag_id = rec.id;
+      delete from public.profile_tags where tag_id = rec.id;
+      delete from public.tags where id = rec.id;
+      affected := true;
+      continue;
+    end if;
+
+    -- canonical 行を確保（大文字小文字無視で既存があればそれを使う）。
+    insert into public.tags (name, category, created_by)
+    values (canonical_name, rec.category, rec.created_by)
+    on conflict ((lower(name))) do nothing;
+    select id into canonical_id
+      from public.tags
+     where lower(name) = lower(canonical_name);
+
+    -- profile_tags を付け替え。canonical 側に既にある (profile, tag) は
+    -- 主キー重複になるので、無いものだけ移動して残りは削除する。
+    update public.profile_tags pt
+       set tag_id = canonical_id
+     where pt.tag_id = rec.id
+       and not exists (
+         select 1 from public.profile_tags pt2
+          where pt2.profile_id = pt.profile_id
+            and pt2.tag_id = canonical_id
+       );
+    delete from public.profile_tags where tag_id = rec.id;
+
+    -- suggested_tags は (user, tag) のユニーク制約が無いのでそのまま付け替え。
+    update public.suggested_tags set tag_id = canonical_id where tag_id = rec.id;
+
+    delete from public.tags where id = rec.id;
+    affected := true;
+  end loop;
+
+  -- proposed_name 側に紛れ込んだ `#` も剥がす（剥がした結果が空になる行は
+  -- check 制約 (tag_id or proposed_name) を壊しうるので触らない）。
+  update public.suggested_tags s
+     set proposed_name = btrim(
+       regexp_replace(regexp_replace(s.proposed_name, '^[#＃\s]+', ''), '\s+', ' ', 'g')
+     )
+   where s.proposed_name ~ '^[#＃\s]*[#＃]'
+     and btrim(
+       regexp_replace(regexp_replace(s.proposed_name, '^[#＃\s]+', ''), '\s+', ' ', 'g')
+     ) <> '';
+
+  -- 付け替えが起きた場合のみ usage_count を全再計算（同概念タグの分散を解消）。
+  if affected then
+    update public.tags t
+       set usage_count = coalesce(sub.cnt, 0)
+      from (
+        select tag_id, count(*)::int as cnt
+          from public.profile_tags
+         group by tag_id
+      ) sub
+     where t.id = sub.tag_id;
+    -- profile_tags に現れないタグは 0 に戻す。
+    update public.tags t
+       set usage_count = 0
+     where not exists (
+       select 1 from public.profile_tags pt where pt.tag_id = t.id
+     );
+  end if;
+end $$;
+
+-- ============================================
 -- Trigger: updated_at の自動更新
 -- ============================================
 create or replace function public.handle_updated_at()

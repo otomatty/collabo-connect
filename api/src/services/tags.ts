@@ -14,10 +14,26 @@ export function isTagCategory(v: unknown): v is TagCategory {
   return typeof v === "string" && (TAG_CATEGORIES as string[]).includes(v);
 }
 
-/** Normalize a raw tag input: trim and collapse internal whitespace. Empty strings return null. */
+/**
+ * Normalize a raw tag input into its canonical stored form.
+ *
+ * - Strips a leading hashtag marker (half-width `#` or full-width `＃`) plus any
+ *   surrounding whitespace, so `"#React"`, `"＃React"` and `"# react"` all
+ *   canonicalize to `"React"`. The `#` is purely a display affordance; it must
+ *   not leak into `tags.name`, otherwise `#React` and `React` would coexist as
+ *   separate rows and split search hits / usage_count (see issue #25).
+ * - Trims surrounding whitespace and collapses internal runs to a single space.
+ * - A trailing or internal `#` (e.g. `"C#"`) is preserved — only a *leading*
+ *   marker is treated as decoration.
+ *
+ * Returns null when nothing meaningful remains (empty or marker-only input).
+ */
 export function normalizeTagName(raw: string): string | null {
-  const trimmed = raw.trim().replace(/\s+/g, " ");
-  return trimmed === "" ? null : trimmed;
+  const normalized = raw
+    .replace(/^[#＃\s]+/, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  return normalized === "" ? null : normalized;
 }
 
 /**

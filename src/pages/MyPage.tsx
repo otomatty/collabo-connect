@@ -74,8 +74,9 @@ export default function MyPage() {
 
   const pendingCount = suggestedTags?.length ?? 0;
   // `tags` の各要素は profile API が返す get_profile_tags() = tags.name と
-  // 同じ文字列。`tagDetails[].name` も同じ tags.name 由来なので、prefix の
-  // 加工なしで一致する。useMemo で再計算を抑制。
+  // 同じ canonical 名（`#` なし）。`tagDetails[].name` も同じ tags.name 由来
+  // なので、表示用の `#` を付ける前のこの段階で素直に一致する。`#` は描画時に
+  // Badge 側で付与するだけ（issue #25）。useMemo で再計算を抑制。
   const newTagNames = useMemo(() => {
     if (!tagDetails) return new Set<string>();
     const cutoff = Date.now() - NEW_TAG_WINDOW_MS;
@@ -222,9 +223,19 @@ export default function MyPage() {
   };
 
   const handleAddTag = () => {
-    const tag = newTag.trim();
-    if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag.startsWith("#") ? tag : `#${tag}`]);
+    // Mirror the backend normalizeTagName (api/src/services/tags.ts) exactly so
+    // the optimistic UI state matches what gets persisted: strip a leading
+    // "#"/"＃" marker + whitespace, trim, then collapse internal whitespace.
+    // The "#" is display-only (added by the Badge); persisting it would split
+    // "#React"/"React" — see issue #25.
+    const tag = newTag
+      .replace(/^[#＃\s]+/, "")
+      .trim()
+      .replace(/\s+/g, " ");
+    // Case-insensitive dedupe to match the backend's case-insensitive tag
+    // uniqueness (upsertTag resolves "React"/"react" to a single row).
+    if (tag && !tags.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      setTags([...tags, tag]);
       setNewTag("");
     }
   };
@@ -274,7 +285,7 @@ export default function MyPage() {
                 variant="secondary"
                 className="rounded-full text-xs font-normal flex items-center gap-1"
               >
-                {tag}
+                #{tag}
                 {isNew ? (
                   <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-semibold leading-none text-accent-foreground">
                     NEW
@@ -469,7 +480,7 @@ export default function MyPage() {
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="rounded-full flex items-center gap-1 pr-1 text-xs font-normal">
-                    {tag}
+                    #{tag}
                     <button
                       type="button"
                       onClick={() => handleRemoveTag(tag)}
