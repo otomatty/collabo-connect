@@ -137,21 +137,29 @@ router.post("/:id/accept", requireAuth, async (c) => {
       return c.json({ error: "Suggested tag has neither tag_id nor proposed_name" }, 500);
     }
 
+    // Atomically claim the suggestion: a single conditional UPDATE is the
+    // compare-and-swap that serializes concurrent accept/reject (e.g. two tabs).
+    // Only the request that flips it from 'pending' proceeds; a loser sees 0
+    // affected rows and returns 409 WITHOUT inserting the profile tag, so we
+    // can't end up with an accepted-then-rejected row whose tag link lingers.
+    const claimed = await db.query<SuggestedTag>(
+      `UPDATE suggested_tags
+          SET status = 'accepted',
+              resolved_at = now(),
+              tag_id = COALESCE(tag_id, $2)
+        WHERE id = $1 AND status = 'pending'
+        RETURNING *`,
+      [id, resolvedTagId]
+    );
+    if (claimed.rows.length === 0) {
+      return c.json({ error: "Suggested tag is not pending" }, 409);
+    }
+
     await db.query(
       `INSERT INTO profile_tags (profile_id, tag_id, source)
             VALUES ($1, $2, 'auto')
        ON CONFLICT (profile_id, tag_id) DO NOTHING`,
       [userId, resolvedTagId]
-    );
-
-    const updated = await db.query<SuggestedTag>(
-      `UPDATE suggested_tags
-          SET status = 'accepted',
-              resolved_at = now(),
-              tag_id = COALESCE(tag_id, $2)
-        WHERE id = $1
-        RETURNING *`,
-      [id, resolvedTagId]
     );
 
     await db.query(
@@ -161,7 +169,7 @@ router.post("/:id/accept", requireAuth, async (c) => {
       [resolvedTagId]
     );
 
-    return c.json(updated.rows[0]);
+    return c.json(claimed.rows[0]);
   } catch (err) {
     console.error("POST /api/suggested-tags/:id/accept error:", err);
     return c.json({ error: "Failed to accept suggested tag" }, 500);
@@ -188,14 +196,19 @@ router.post("/:id/reject", requireAuth, async (c) => {
       return c.json({ error: lookup.message }, lookup.status);
     }
 
+    // Conditional update (compare-and-swap on status) so a concurrent accept
+    // can't be silently overwritten — the loser gets 409.
     const updated = await db.query<SuggestedTag>(
       `UPDATE suggested_tags
           SET status = 'rejected',
               resolved_at = now()
-        WHERE id = $1
+        WHERE id = $1 AND status = 'pending'
         RETURNING *`,
       [id]
     );
+    if (updated.rows.length === 0) {
+      return c.json({ error: "Suggested tag is not pending" }, 409);
+    }
 
     return c.json(updated.rows[0]);
   } catch (err) {
