@@ -1,9 +1,9 @@
-import { Router, type Request, type Response } from "express";
-import { pool } from "../db.js";
+import { Hono } from "hono";
 import { isTagCategory } from "../services/tags.js";
+import type { AppContext } from "../bindings.js";
 import type { Tag, TagCategory } from "../types.js";
 
-const router = Router();
+const router = new Hono<AppContext>();
 
 function parseLimit(raw: unknown, fallback: number, max: number): number {
   const n = Number.parseInt(String(raw ?? ""), 10);
@@ -12,9 +12,8 @@ function parseLimit(raw: unknown, fallback: number, max: number): number {
 }
 
 /**
- * Escape LIKE/ILIKE metacharacters (%, _, \) in user input so they are matched
- * literally rather than interpreted as wildcards. Used together with ESCAPE '\'
- * in the SQL pattern.
+ * Escape LIKE metacharacters (%, _, \) in user input so they are matched
+ * literally rather than interpreted as wildcards. Used together with ESCAPE '\'.
  */
 function escapeLikePattern(s: string): string {
   return s.replace(/[\\%_]/g, "\\$&");
@@ -25,10 +24,12 @@ function escapeLikePattern(s: string): string {
  * Substring search (case-insensitive) over name and aliases.
  * Results ordered by usage_count desc so popular tags surface first.
  */
-router.get("/", async (req: Request, res: Response): Promise<void> => {
-  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-  const categoryRaw = req.query.category;
-  const limit = parseLimit(req.query.limit, 20, 100);
+router.get("/", async (c) => {
+  const db = c.get("db");
+  const qRaw = c.req.query("q");
+  const q = typeof qRaw === "string" ? qRaw.trim() : "";
+  const categoryRaw = c.req.query("category");
+  const limit = parseLimit(c.req.query("limit"), 20, 100);
 
   const category: TagCategory | null = isTagCategory(categoryRaw) ? categoryRaw : null;
 
@@ -39,8 +40,8 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
     params.push(`%${escapeLikePattern(q)}%`);
     const p = params.length;
     where.push(
-      `(name ILIKE $${p} ESCAPE '\\' OR EXISTS (
-          SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a WHERE a ILIKE $${p} ESCAPE '\\'
+      `(name LIKE $${p} ESCAPE '\\' OR EXISTS (
+          SELECT 1 FROM json_each(coalesce(aliases, '[]')) WHERE value LIKE $${p} ESCAPE '\\'
         ))`
     );
   }
@@ -51,22 +52,22 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
   params.push(limit);
   const limitParam = `$${params.length}`;
 
-  const sql = `SELECT * FROM public.tags
+  const sql = `SELECT * FROM tags
               ${where.length > 0 ? "WHERE " + where.join(" AND ") : ""}
               ORDER BY usage_count DESC, name ASC
               LIMIT ${limitParam}`;
-  const r = await pool.query<Tag>(sql, params);
-  res.json(r.rows);
+  const r = await db.query<Tag>(sql, params);
+  return c.json(r.rows);
 });
 
 /**
  * GET /api/tags/popular?category=<category>&limit=<n>
- * Top-N tags ordered by usage_count. Used by member search quick-filter bar
- * and by the Phase 2 tagging agent as a discovery tool.
+ * Top-N tags ordered by usage_count.
  */
-router.get("/popular", async (req: Request, res: Response): Promise<void> => {
-  const categoryRaw = req.query.category;
-  const limit = parseLimit(req.query.limit, 10, 50);
+router.get("/popular", async (c) => {
+  const db = c.get("db");
+  const categoryRaw = c.req.query("category");
+  const limit = parseLimit(c.req.query("limit"), 10, 50);
   const category: TagCategory | null = isTagCategory(categoryRaw) ? categoryRaw : null;
 
   const params: unknown[] = [];
@@ -76,27 +77,22 @@ router.get("/popular", async (req: Request, res: Response): Promise<void> => {
     where.push(`category = $${params.length}`);
   }
   params.push(limit);
-  const sql = `SELECT * FROM public.tags
+  const sql = `SELECT * FROM tags
               WHERE ${where.join(" AND ")}
               ORDER BY usage_count DESC, name ASC
               LIMIT $${params.length}`;
-  const r = await pool.query<Tag>(sql, params);
-  res.json(r.rows);
+  const r = await db.query<Tag>(sql, params);
+  return c.json(r.rows);
 });
 
-/**
- * GET /api/tags/:id - fetch a single tag row.
- */
-router.get("/:id", async (req: Request, res: Response): Promise<void> => {
-  const r = await pool.query<Tag>(
-    "SELECT * FROM public.tags WHERE id = $1",
-    [req.params.id]
-  );
+/** GET /api/tags/:id - fetch a single tag row. */
+router.get("/:id", async (c) => {
+  const db = c.get("db");
+  const r = await db.query<Tag>("SELECT * FROM tags WHERE id = $1", [c.req.param("id")]);
   if (r.rows.length === 0) {
-    res.status(404).json({ error: "Tag not found" });
-    return;
+    return c.json({ error: "Tag not found" }, 404);
   }
-  res.json(r.rows[0]);
+  return c.json(r.rows[0]);
 });
 
 export default router;

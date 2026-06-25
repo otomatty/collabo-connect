@@ -1,4 +1,4 @@
-/** DB row types (aligned with railway/schema.sql) */
+/** DB row types (aligned with api/migrations/0001_init.sql, D1/SQLite) */
 
 export type TagCategory = "skill" | "hobby" | "area" | "role" | "other";
 
@@ -150,11 +150,3 @@ export type Activity =
       at: string;
     }
   | { type: "question_answered"; question: string; answer: string; at: string };
-
-/** Extend Express Request with optional userId (set by auth middleware). Module augmentation (no namespace). */
-import type {} from "express";
-declare module "express-serve-static-core" {
-  interface Request {
-    userId?: string;
-  }
-}

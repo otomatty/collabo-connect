@@ -1,5 +1,4 @@
-import { Router, type Request, type Response } from "express";
-import { pool } from "../db.js";
+import { Hono } from "hono";
 import { normalizeDateOnlyInput } from "../date-utils.js";
 import { requireAuth } from "../middleware/auth.js";
 import { syncProfileTags } from "../services/tags.js";
@@ -8,6 +7,8 @@ import {
   saveConversationTopics,
 } from "../services/conversation-topics.js";
 import { CONVERSATION_TOPICS_COUNT } from "../prompts/conversation-topics.js";
+import { profileTagsSubquery } from "../sql-helpers.js";
+import type { AppContext } from "../bindings.js";
 import type {
   Activity,
   ConversationTopic,
@@ -29,8 +30,7 @@ const ACTIVITY_LIMIT_MAX = 20;
 /** Raw row shape returned by the activity UNION query before hydration. */
 interface ActivityRow {
   type: Activity["type"];
-  // pg parses timestamptz columns to JS Date objects at runtime.
-  at: Date | string | null;
+  at: string | null;
   posting_id: string | null;
   action: string | null;
   question: string | null;
@@ -39,10 +39,7 @@ interface ActivityRow {
 
 /**
  * Validate `conversation_topics` payload coming from PUT /api/profiles/me.
- *
- * Returns the sanitized (trimmed, length-bounded) array on success or an error
- * string on failure so the caller can respond 400. Empty arrays are valid
- * (clears the field). `description` may be empty; `title` is required.
+ * Returns the sanitized array on success or an error string on failure.
  */
 function parseConversationTopics(
   raw: unknown
@@ -76,16 +73,10 @@ function parseConversationTopics(
       return { ok: false, error: `conversation_topics[${i}].title is required` };
     }
     if (trimmedEmoji.length > TOPIC_EMOJI_MAX) {
-      return {
-        ok: false,
-        error: `conversation_topics[${i}].emoji exceeds ${TOPIC_EMOJI_MAX} chars`,
-      };
+      return { ok: false, error: `conversation_topics[${i}].emoji exceeds ${TOPIC_EMOJI_MAX} chars` };
     }
     if (trimmedTitle.length > TOPIC_TITLE_MAX) {
-      return {
-        ok: false,
-        error: `conversation_topics[${i}].title exceeds ${TOPIC_TITLE_MAX} chars`,
-      };
+      return { ok: false, error: `conversation_topics[${i}].title exceeds ${TOPIC_TITLE_MAX} chars` };
     }
     if (trimmedDescription.length > TOPIC_DESCRIPTION_MAX) {
       return {
@@ -93,138 +84,114 @@ function parseConversationTopics(
         error: `conversation_topics[${i}].description exceeds ${TOPIC_DESCRIPTION_MAX} chars`,
       };
     }
-    result.push({
-      emoji: trimmedEmoji,
-      title: trimmedTitle,
-      description: trimmedDescription,
-    });
+    result.push({ emoji: trimmedEmoji, title: trimmedTitle, description: trimmedDescription });
   }
   return { ok: true, value: result };
 }
 
-const router = Router();
+const router = new Hono<AppContext>();
 
-/**
- * SELECT clause that attaches the computed `tags: text[]` column via the
- * `public.get_profile_tags(id)` SQL function. API responses keep the original
- * `tags: string[]` shape so the frontend does not need to change.
- */
-const PROFILE_SELECT = "p.*, public.get_profile_tags(p.id) AS tags";
+/** SELECT clause attaching the computed `tags: string[]` column. */
+const PROFILE_SELECT = `p.*, ${profileTagsSubquery("p.id")} AS tags`;
 
 /** GET /api/profiles - list all profiles (for members list) */
-router.get("/", async (_req: Request, res: Response): Promise<void> => {
-  const r = await pool.query<Profile>(
-    `SELECT ${PROFILE_SELECT} FROM public.profiles p ORDER BY p.name`
+router.get("/", async (c) => {
+  const db = c.get("db");
+  const r = await db.query<Profile>(
+    `SELECT ${PROFILE_SELECT} FROM profiles p ORDER BY p.name`
   );
-  res.json(r.rows);
+  return c.json(r.rows);
 });
 
-/** GET /api/profiles/me - current user's profile (auth required). Creates a default row if none exists (e.g. new magic-link user). */
-router.get("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  let r = await pool.query<Profile>(
-    `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+/** GET /api/profiles/me - current user's profile. Creates a default row if none. */
+router.get("/me", requireAuth, async (c) => {
+  const db = c.get("db");
+  const userId = c.get("userId")!;
+  let r = await db.query<Profile>(
+    `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
     [userId]
   );
   if (r.rows.length === 0) {
-    await pool.query(
-      `INSERT INTO public.profiles (id, name, avatar_url, job_type)
+    await db.query(
+      `INSERT INTO profiles (id, name, avatar_url, job_type)
        VALUES ($1, 'User', '', '')
        ON CONFLICT (id) DO NOTHING`,
       [userId]
     );
-    r = await pool.query<Profile>(
-      `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+    r = await db.query<Profile>(
+      `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
       [userId]
     );
   }
   if (r.rows.length === 0) {
-    res.status(404).json({ error: "Profile not found" });
-    return;
+    return c.json({ error: "Profile not found" }, 404);
   }
-  res.json(r.rows[0]);
+  return c.json(r.rows[0]);
 });
 
-/** POST /api/profiles - create profile for current user (id = JWT sub) */
-router.post("/", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const { name, avatar_url } = req.body as { name?: string; avatar_url?: string };
-  const displayName = typeof name === "string" && name.trim() ? name.trim() : "User";
-  const avatar = typeof avatar_url === "string" ? avatar_url : "";
+/** POST /api/profiles - create profile for current user (id = session user id) */
+router.post("/", requireAuth, async (c) => {
+  const db = c.get("db");
+  const userId = c.get("userId")!;
+  const body = (await c.req.json().catch(() => ({}))) as { name?: string; avatar_url?: string };
+  const displayName =
+    typeof body.name === "string" && body.name.trim() ? body.name.trim() : "User";
+  const avatar = typeof body.avatar_url === "string" ? body.avatar_url : "";
 
-  await pool.query(
-    `INSERT INTO public.profiles (id, name, avatar_url, job_type)
+  await db.query(
+    `INSERT INTO profiles (id, name, avatar_url, job_type)
      VALUES ($1, $2, $3, '')
      ON CONFLICT (id) DO NOTHING`,
     [userId, displayName, avatar]
   );
-  const r = await pool.query<Profile>(
-    `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
+  const r = await db.query<Profile>(
+    `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
     [userId]
   );
   if (r.rows.length === 0) {
-    res.status(409).json({ error: "Profile already exists or conflict" });
-    return;
+    return c.json({ error: "Profile already exists or conflict" }, 409);
   }
-  res.status(201).json(r.rows[0]);
+  return c.json(r.rows[0], 201);
 });
 
-/**
- * GET /api/profiles/me/tags - current user's profile_tags joined with tag rows.
- *
- * Unlike `profiles.tags` (a flat string[]) this exposes per-row metadata —
- * `source` and `created_at` — needed by the MyPage suggested-tag UI to mark
- * recently auto-applied tags with a "NEW" badge. Ordered by recency so the
- * client can take a prefix without sorting.
- */
-router.get("/me/tags", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const r = await pool.query<ProfileTagDetail>(
+/** GET /api/profiles/me/tags - current user's profile_tags joined with tag rows. */
+router.get("/me/tags", requireAuth, async (c) => {
+  const db = c.get("db");
+  const userId = c.get("userId")!;
+  const r = await db.query<ProfileTagDetail>(
     `SELECT t.id AS tag_id,
             t.name,
             t.category,
             t.aliases,
             pt.source,
             pt.created_at
-       FROM public.profile_tags pt
-       JOIN public.tags t ON t.id = pt.tag_id
+       FROM profile_tags pt
+       JOIN tags t ON t.id = pt.tag_id
       WHERE pt.profile_id = $1
-   ORDER BY pt.created_at DESC NULLS LAST, t.name ASC`,
+   ORDER BY pt.created_at DESC, t.name ASC`,
     [userId]
   );
-  res.json(r.rows);
+  return c.json(r.rows);
 });
 
 /**
  * POST /api/profiles/me/conversation-topics/regenerate
- *
- * Used by the MyPage "再生成" button (Phase 3-7). Runs Gemini synchronously so
- * the client immediately renders the new topics. Reuses the same generator as
- * the post-interview fire-and-forget path, but pulls input from the persisted
- * profile (name / role / job_type / tags / ai_intro) since personCard is not
- * stored — it lives only inside the AI interview session.
- *
- * Failure modes follow the issue's acceptance criteria: if generation returns
- * no topics (Gemini error, empty payload, etc.) we leave the existing value
- * untouched and respond 502 so the UI can show an error toast without losing
- * the previous topics.
+ * Runs Gemini synchronously and persists the new topics, or 502 on failure.
  */
-router.post(
-  "/me/conversation-topics/regenerate",
-  requireAuth,
-  async (req: Request, res: Response): Promise<void> => {
-    try {
-      const userId = req.userId!;
-      const r = await pool.query<Profile>(
-        `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
-        [userId]
-      );
-      if (r.rows.length === 0) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
-      }
-      const profile = r.rows[0];
-      const topics = await generateConversationTopics({
+router.post("/me/conversation-topics/regenerate", requireAuth, async (c) => {
+  const db = c.get("db");
+  try {
+    const userId = c.get("userId")!;
+    const r = await db.query<Profile>(
+      `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
+      [userId]
+    );
+    if (r.rows.length === 0) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    const profile = r.rows[0];
+    const topics = await generateConversationTopics(
+      {
         profile: {
           name: profile.name,
           role: profile.role,
@@ -232,88 +199,71 @@ router.post(
           tags: profile.tags,
         },
         aiIntro: profile.ai_intro,
-      });
-      // Insist on the full set so a partial Gemini response doesn't replace
-      // a complete prior set with a worse one. Mirrors the fire-and-forget
-      // path's preserve-on-incomplete behavior.
-      if (topics.length < CONVERSATION_TOPICS_COUNT) {
-        res.status(502).json({ error: "Failed to generate conversation topics" });
-        return;
-      }
-      const saved = await saveConversationTopics(userId, topics);
-      if (!saved) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
-      }
-      const updated = await pool.query<Profile>(
-        `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
-        [userId]
-      );
-      if (updated.rows.length === 0) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
-      }
-      res.json(updated.rows[0]);
-    } catch (err) {
-      console.error("POST /api/profiles/me/conversation-topics/regenerate error:", err);
-      res.status(500).json({ error: "Failed to regenerate conversation topics" });
+      },
+      c.env.GEMINI_API_KEY
+    );
+    if (topics.length < CONVERSATION_TOPICS_COUNT) {
+      return c.json({ error: "Failed to generate conversation topics" }, 502);
     }
+    const saved = await saveConversationTopics(db, userId, topics);
+    if (!saved) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    const updated = await db.query<Profile>(
+      `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
+      [userId]
+    );
+    if (updated.rows.length === 0) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
+    return c.json(updated.rows[0]);
+  } catch (err) {
+    console.error("POST /api/profiles/me/conversation-topics/regenerate error:", err);
+    return c.json({ error: "Failed to regenerate conversation topics" }, 500);
   }
-);
+});
 
 /**
- * GET /api/profiles/:id/activity?limit=3 - public "最近の活動" timeline.
- *
- * Merges three event sources into a single time-descending list so other
- * members can spot shared experiences (same posting, same daily question):
- *   - postings the user created            → posting_created
- *   - postings the user joined / liked     → posting_participated
- *   - daily AI questions the user answered → question_answered
- *
- * Privacy: intentionally public (no auth) — answers and participation are
- * already visible elsewhere, matching the existing spec. `limit` is clamped to
- * [1, ACTIVITY_LIMIT_MAX] and defaults to 3.
- *
- * The UNION ALL is ordered + limited in SQL so we only hydrate the few
- * postings that actually surface, then attach them in JS preserving order.
+ * GET /api/profiles/:id/activity?limit=3 - public "最近の活動" timeline merging
+ * created postings, participated postings, and answered daily questions.
  */
-router.get("/:id/activity", async (req: Request, res: Response): Promise<void> => {
+router.get("/:id/activity", async (c) => {
+  const db = c.get("db");
   try {
-    const { id } = req.params;
-    const rawLimit = Number.parseInt(String(req.query.limit ?? ""), 10);
+    const id = c.req.param("id");
+    const rawLimit = Number.parseInt(String(c.req.query("limit") ?? ""), 10);
     const limit = Number.isFinite(rawLimit)
       ? Math.min(Math.max(rawLimit, 1), ACTIVITY_LIMIT_MAX)
       : ACTIVITY_LIMIT_DEFAULT;
 
-    const combined = await pool.query<ActivityRow>(
+    const combined = await db.query<ActivityRow>(
       `SELECT type, at, posting_id, action, question, answer
        FROM (
          SELECT 'posting_created' AS type, p.created_at AS at,
-                p.id AS posting_id, NULL::text AS action,
-                NULL::text AS question, NULL::text AS answer
-           FROM public.postings p
+                p.id AS posting_id, NULL AS action,
+                NULL AS question, NULL AS answer
+           FROM postings p
           WHERE p.creator_id = $1
          UNION ALL
          SELECT 'posting_participated' AS type, pp.created_at AS at,
                 pp.posting_id AS posting_id, pp.action AS action,
-                NULL::text AS question, NULL::text AS answer
-           FROM public.posting_participants pp
-           JOIN public.postings p2 ON p2.id = pp.posting_id
+                NULL AS question, NULL AS answer
+           FROM posting_participants pp
+           JOIN postings p2 ON p2.id = pp.posting_id
           WHERE pp.user_id = $1 AND p2.creator_id <> $1
          UNION ALL
          SELECT 'question_answered' AS type, r.created_at AS at,
-                NULL::uuid AS posting_id, NULL::text AS action,
+                NULL AS posting_id, NULL AS action,
                 q.question AS question, r.answer AS answer
-           FROM public.ai_question_responses r
-           JOIN public.ai_questions q ON q.id = r.question_id
+           FROM ai_question_responses r
+           JOIN ai_questions q ON q.id = r.question_id
           WHERE r.user_id = $1
        ) combined
-      ORDER BY at DESC NULLS LAST
+      ORDER BY at DESC
       LIMIT $2`,
       [id, limit]
     );
 
-    // Hydrate the postings referenced by posting_* entries in one round-trip.
     const postingIds = [
       ...new Set(
         combined.rows
@@ -323,16 +273,16 @@ router.get("/:id/activity", async (req: Request, res: Response): Promise<void> =
     ];
     const postingMap = new Map<string, Posting>();
     if (postingIds.length > 0) {
-      const pr = await pool.query<Posting>(
-        "SELECT * FROM public.postings WHERE id = ANY($1)",
-        [postingIds]
+      const inList = postingIds.map((_id, i) => `$${i + 1}`).join(", ");
+      const pr = await db.query<Posting>(
+        `SELECT * FROM postings WHERE id IN (${inList})`,
+        [...postingIds]
       );
       for (const p of pr.rows) postingMap.set(p.id, p);
     }
 
     const activities: Activity[] = [];
     for (const row of combined.rows) {
-      // pg returns timestamptz as a Date; serialize to ISO for a stable string.
       const at = row.at ? new Date(row.at).toISOString() : "";
       if (row.type === "question_answered") {
         activities.push({
@@ -344,85 +294,67 @@ router.get("/:id/activity", async (req: Request, res: Response): Promise<void> =
         continue;
       }
       const posting = row.posting_id ? postingMap.get(row.posting_id) : undefined;
-      // Skip entries whose posting vanished between the two queries (rare).
       if (!posting) continue;
       if (row.type === "posting_created") {
         activities.push({ type: "posting_created", posting, at });
       } else {
-        // Defensively whitelist the action so an unexpected DB value can't
-        // leak through and render as `undefined` in the client's label map.
         const action: ParticipantAction =
-          row.action === "interested" || row.action === "online"
-            ? row.action
-            : "join";
+          row.action === "interested" || row.action === "online" ? row.action : "join";
         activities.push({ type: "posting_participated", posting, action, at });
       }
     }
 
-    res.json(activities);
+    return c.json(activities);
   } catch (err) {
-    // A malformed :id (non-UUID) makes pg throw `invalid input syntax for
-    // type uuid`; without this catch it would surface as an unhandled
-    // rejection rather than a clean 500.
     console.error("GET /api/profiles/:id/activity error:", err);
-    res.status(500).json({ error: "Failed to load activity" });
+    return c.json({ error: "Failed to load activity" }, 500);
   }
 });
 
-/**
- * GET /api/profiles/:id/tags - public projection of a profile's tags with
- * category info. Used by MemberDetailPage to group tags by category without
- * bloating the main `GET /api/profiles/:id` payload (which is also shared by
- * the members list endpoint). Returns an empty array for profiles with no
- * tags — we don't distinguish 404 here because the parent profile fetch
- * already handles existence.
- */
-router.get("/:id/tags", async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const r = await pool.query<ProfilePublicTag>(
+/** GET /api/profiles/:id/tags - public projection of a profile's tags with category. */
+router.get("/:id/tags", async (c) => {
+  const db = c.get("db");
+  const r = await db.query<ProfilePublicTag>(
     `SELECT t.id AS tag_id, t.name, t.category
-       FROM public.profile_tags pt
-       JOIN public.tags t ON t.id = pt.tag_id
+       FROM profile_tags pt
+       JOIN tags t ON t.id = pt.tag_id
       WHERE pt.profile_id = $1
    ORDER BY t.category ASC, t.name ASC`,
-    [id]
+    [c.req.param("id")]
   );
-  res.json(r.rows);
+  return c.json(r.rows);
 });
 
 /** GET /api/profiles/:id - get profile by id (public) */
-router.get("/:id", async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const r = await pool.query<Profile>(
-    `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
-    [id]
+router.get("/:id", async (c) => {
+  const db = c.get("db");
+  const r = await db.query<Profile>(
+    `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
+    [c.req.param("id")]
   );
   if (r.rows.length === 0) {
-    res.status(404).json({ error: "Profile not found" });
-    return;
+    return c.json({ error: "Profile not found" }, 404);
   }
-  res.json(r.rows[0]);
+  return c.json(r.rows[0]);
 });
 
 /** PUT /api/profiles/me - update current user's profile */
-router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.put("/me", requireAuth, async (c) => {
+  const db = c.get("db");
   try {
-    const userId = req.userId!;
-    const body = { ...(req.body as Partial<Profile>) };
+    const userId = c.get("userId")!;
+    const body = { ...((await c.req.json().catch(() => ({}))) as Partial<Profile>) };
     if (Object.prototype.hasOwnProperty.call(body, "joined_date")) {
       body.joined_date = normalizeDateOnlyInput(body.joined_date) as Profile["joined_date"];
     }
 
     if ("nickname" in body) {
       if (typeof body.nickname !== "string") {
-        res.status(400).json({ error: "nickname must be a string" });
-        return;
+        return c.json({ error: "nickname must be a string" }, 400);
       }
-      // Empty string is valid (clears the nickname; matches schema default).
       body.nickname = body.nickname.trim();
       if (body.nickname.length > NICKNAME_MAX) {
-        res.status(400).json({ error: `nickname exceeds ${NICKNAME_MAX} chars` });
-        return;
+        return c.json({ error: `nickname exceeds ${NICKNAME_MAX} chars` }, 400);
       }
     }
 
@@ -430,8 +362,7 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
     if ("conversation_topics" in body) {
       const parsed = parseConversationTopics(body.conversation_topics);
       if (!parsed.ok) {
-        res.status(400).json({ error: parsed.error });
-        return;
+        return c.json({ error: parsed.error }, 400);
       }
       parsedTopics = parsed.value;
     }
@@ -440,84 +371,57 @@ router.put("/me", requireAuth, async (req: Request, res: Response): Promise<void
       "name", "nickname", "avatar_url", "role", "areas", "job_type", "ai_intro", "joined_date",
     ] as const;
 
-    const client = await pool.connect();
-    try {
-      await client.query("BEGIN");
+    // D1 has no interactive transactions; statements run sequentially.
+    const exists = await db.query("SELECT 1 FROM profiles WHERE id = $1", [userId]);
+    if (exists.rows.length === 0) {
+      return c.json({ error: "Profile not found" }, 404);
+    }
 
-      // Verify the profile row exists before touching tags. Otherwise
-      // syncProfileTags would hit a FK violation on tags.created_by /
-      // profile_tags.profile_id and surface as a 500 rather than 404.
-      const exists = await client.query(
-        "SELECT 1 FROM public.profiles WHERE id = $1",
-        [userId]
-      );
-      if (exists.rowCount === 0) {
-        await client.query("ROLLBACK");
-        res.status(404).json({ error: "Profile not found" });
-        return;
-      }
-
-      const updates: string[] = [];
-      const values: unknown[] = [];
-      let i = 1;
-      for (const key of scalarCols) {
-        if (key in body) {
-          updates.push(`${key} = $${i}`);
-          values.push(body[key]);
-          i++;
-        }
-      }
-      if (parsedTopics !== undefined) {
-        // Bump `conversation_topics_updated_at` only when the value actually
-        // changes, so a no-op PUT does not invalidate the topics-specific
-        // freshness signal. PG evaluates both RHS expressions against the row
-        // BEFORE any SET assignments take effect, so the CASE compares the OLD
-        // column value against the new param.
-        updates.push(`conversation_topics = $${i}::jsonb`);
-        updates.push(
-          `conversation_topics_updated_at = CASE
-             WHEN conversation_topics IS DISTINCT FROM $${i}::jsonb THEN now()
-             ELSE conversation_topics_updated_at
-           END`
-        );
-        values.push(JSON.stringify(parsedTopics));
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let i = 1;
+    for (const key of scalarCols) {
+      if (key in body) {
+        updates.push(`${key} = $${i}`);
+        values.push(body[key]);
         i++;
       }
-      if (updates.length > 0) {
-        values.push(userId);
-        await client.query(
-          `UPDATE public.profiles SET ${updates.join(", ")} WHERE id = $${i}`,
-          values
-        );
-      }
-
-      if ("tags" in body) {
-        // null / undefined / non-array inputs are all treated as "clear all tags".
-        // The frontend sends `tags: null` when the user empties the field.
-        // syncProfileTags filters out non-string elements defensively.
-        const rawTags: unknown[] = Array.isArray(body.tags) ? body.tags : [];
-        await syncProfileTags(client, userId, rawTags);
-      }
-
-      const r = await client.query<Profile>(
-        `SELECT ${PROFILE_SELECT} FROM public.profiles p WHERE p.id = $1`,
-        [userId]
-      );
-      await client.query("COMMIT");
-      res.json(r.rows[0]);
-    } catch (err) {
-      await client.query("ROLLBACK");
-      throw err;
-    } finally {
-      client.release();
     }
+    if (parsedTopics !== undefined) {
+      updates.push(`conversation_topics = $${i}`);
+      updates.push(
+        `conversation_topics_updated_at = CASE
+           WHEN conversation_topics IS DISTINCT FROM $${i} THEN now()
+           ELSE conversation_topics_updated_at
+         END`
+      );
+      values.push(JSON.stringify(parsedTopics));
+      i++;
+    }
+    if (updates.length > 0) {
+      values.push(userId);
+      await db.query(
+        `UPDATE profiles SET ${updates.join(", ")} WHERE id = $${i}`,
+        values
+      );
+    }
+
+    if ("tags" in body) {
+      const rawTags: unknown[] = Array.isArray(body.tags) ? body.tags : [];
+      await syncProfileTags(db, userId, rawTags);
+    }
+
+    const r = await db.query<Profile>(
+      `SELECT ${PROFILE_SELECT} FROM profiles p WHERE p.id = $1`,
+      [userId]
+    );
+    return c.json(r.rows[0]);
   } catch (err) {
     if (err instanceof Error && err.message.startsWith("joined_date")) {
-      res.status(400).json({ error: err.message });
-      return;
+      return c.json({ error: err.message }, 400);
     }
     console.error("PUT /api/profiles/me error:", err);
-    res.status(500).json({ error: "Failed to update profile" });
+    return c.json({ error: "Failed to update profile" }, 500);
   }
 });
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { pool } from "../db.js";
+import type { DbClient } from "../db.js";
 import {
   CONVERSATION_TOPICS_COUNT,
   CONVERSATION_TOPICS_SYSTEM_PROMPT,
@@ -8,7 +8,6 @@ import {
 } from "../prompts/conversation-topics.js";
 import type { ConversationTopic } from "../types.js";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_TIMEOUT_MS = 30_000;
 
@@ -22,11 +21,15 @@ interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
 }
 
-function buildGeminiUrl(): string {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+function buildGeminiUrl(apiKey: string): string {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 }
 
-async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string
+): Promise<string> {
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: [{ text: userPrompt }] }],
@@ -39,7 +42,7 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
   try {
-    const res = await fetch(buildGeminiUrl(), {
+    const res = await fetch(buildGeminiUrl(apiKey), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -120,15 +123,16 @@ function normalizeTopics(parsed: unknown): ConversationTopic[] {
  * callers can fall back to keeping the existing value.
  */
 export async function generateConversationTopics(
-  input: ConversationTopicsInput
+  input: ConversationTopicsInput,
+  apiKey: string | undefined
 ): Promise<ConversationTopic[]> {
-  if (!GEMINI_API_KEY) {
+  if (!apiKey) {
     console.warn("conversation-topics: GEMINI_API_KEY is not configured; skipping");
     return [];
   }
   try {
     const userPrompt = buildConversationTopicsUserPrompt(input);
-    const raw = await callGemini(CONVERSATION_TOPICS_SYSTEM_PROMPT, userPrompt);
+    const raw = await callGemini(CONVERSATION_TOPICS_SYSTEM_PROMPT, userPrompt, apiKey);
     const parsed = parseJsonFromText(raw);
     return normalizeTopics(parsed);
   } catch (err) {
@@ -150,15 +154,16 @@ export async function generateConversationTopics(
  * regenerating to identical content does not invalidate the freshness signal.
  */
 export async function saveConversationTopics(
+  db: DbClient,
   userId: string,
   topics: ConversationTopic[]
 ): Promise<boolean> {
   if (topics.length !== CONVERSATION_TOPICS_COUNT) return false;
-  const r = await pool.query(
-    `UPDATE public.profiles
-        SET conversation_topics = $2::jsonb,
+  const r = await db.query(
+    `UPDATE profiles
+        SET conversation_topics = $2,
             conversation_topics_updated_at = CASE
-              WHEN conversation_topics IS DISTINCT FROM $2::jsonb THEN now()
+              WHEN conversation_topics IS DISTINCT FROM $2 THEN now()
               ELSE conversation_topics_updated_at
             END
       WHERE id = $1`,
@@ -239,8 +244,10 @@ function fingerprintInput(userId: string, input: ConversationTopicsInput): strin
  * this dedup, since it is driven by an explicit user click.
  */
 export async function generateAndSaveConversationTopics(
+  db: DbClient,
   userId: string,
-  input: ConversationTopicsInput
+  input: ConversationTopicsInput,
+  apiKey: string | undefined
 ): Promise<void> {
   if (!userId) {
     console.warn("generateAndSaveConversationTopics: missing userId; skipping");
@@ -258,14 +265,14 @@ export async function generateAndSaveConversationTopics(
 
   let committed = false;
   try {
-    const topics = await generateConversationTopics(input);
+    const topics = await generateConversationTopics(input, apiKey);
     if (topics.length < CONVERSATION_TOPICS_COUNT) {
       // Preserve existing value on incomplete/failed generation. A partial
       // set (1-2 valid topics out of 3) would otherwise overwrite a complete
       // prior set with a worse one.
       return;
     }
-    const saved = await saveConversationTopics(userId, topics);
+    const saved = await saveConversationTopics(db, userId, topics);
     if (!saved) {
       // Profile row missing — don't cache as committed, so a later retry
       // (after the row gets created) can run again instead of being

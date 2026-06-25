@@ -2,10 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { normalizeTagName } from "./tags.js";
 
-// normalizeTagName lives in tags.ts which transitively imports db.ts. The pg
-// Pool is constructed lazily (it only connects on the first query), so a dummy
-// DATABASE_URL is enough to import the module for this pure-function test — see
-// the `test` script in package.json which sets it.
+// normalizeTagName is a pure function in tags.ts with no DB dependency, so it
+// can be imported and tested directly (no D1 binding needed).
 describe("normalizeTagName", () => {
   it("returns the input unchanged when already canonical", () => {
     assert.equal(normalizeTagName("React"), "React");

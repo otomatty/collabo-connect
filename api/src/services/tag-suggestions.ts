@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import type { PoolClient } from "pg";
-import { pool } from "../db.js";
+import type { DbClient } from "../db.js";
 import { findTagByName, isTagCategory, normalizeTagName } from "./tags.js";
 import {
   extractTags,
@@ -38,19 +37,19 @@ export interface PersistSuggestionsResult {
  * confirm a match.
  */
 async function resolveExistingTag(
-  client: PoolClient,
+  client: DbClient,
   suggestion: ExtractedTag
 ): Promise<Tag | null> {
   const candidateId = suggestion.existing_id;
   if (candidateId && UUID_REGEX.test(candidateId)) {
     const r = await client.query<Tag>(
-      `SELECT * FROM public.tags
+      `SELECT * FROM tags
         WHERE id = $1
           AND (
             lower(name) = lower($2)
             OR EXISTS (
-              SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a
-               WHERE lower(a) = lower($2)
+              SELECT 1 FROM json_each(coalesce(aliases, '[]'))
+               WHERE lower(value) = lower($2)
             )
           )`,
       [candidateId, suggestion.name]
@@ -61,24 +60,24 @@ async function resolveExistingTag(
 }
 
 async function profileAlreadyHasTag(
-  client: PoolClient,
+  client: DbClient,
   userId: string,
   tagId: string
 ): Promise<boolean> {
   const r = await client.query(
-    "SELECT 1 FROM public.profile_tags WHERE profile_id = $1 AND tag_id = $2",
+    "SELECT 1 FROM profile_tags WHERE profile_id = $1 AND tag_id = $2",
     [userId, tagId]
   );
   return r.rows.length > 0;
 }
 
 async function pendingSuggestionExistsForName(
-  client: PoolClient,
+  client: DbClient,
   userId: string,
   proposedName: string
 ): Promise<boolean> {
   const r = await client.query(
-    `SELECT 1 FROM public.suggested_tags
+    `SELECT 1 FROM suggested_tags
       WHERE user_id = $1
         AND tag_id IS NULL
         AND lower(proposed_name) = lower($2)
@@ -109,13 +108,14 @@ interface ResolvedSuggestion {
  * UI never keeps showing a pending row for a tag the user already has.
  */
 async function acceptResolvedPending(
-  client: PoolClient,
+  client: DbClient,
   userId: string,
   tag: Tag
 ): Promise<void> {
   const lowerCandidates = lowerNameAndAliases(tag);
+  const inList = lowerCandidates.map((_c, i) => `$${i + 3}`).join(", ");
   await client.query(
-    `UPDATE public.suggested_tags
+    `UPDATE suggested_tags
         SET status = 'accepted',
             resolved_at = now(),
             tag_id = COALESCE(tag_id, $2)
@@ -123,9 +123,9 @@ async function acceptResolvedPending(
         AND status = 'pending'
         AND (
           tag_id = $2
-          OR (tag_id IS NULL AND lower(proposed_name) = ANY($3::text[]))
+          OR (tag_id IS NULL AND lower(proposed_name) IN (${inList}))
         )`,
-    [userId, tag.id, lowerCandidates]
+    [userId, tag.id, ...lowerCandidates]
   );
 }
 
@@ -151,21 +151,22 @@ function lowerNameAndAliases(tag: Tag): string[] {
  * the INSERT.
  */
 async function linkPendingSuggestionToTag(
-  client: PoolClient,
+  client: DbClient,
   userId: string,
   tag: Tag
 ): Promise<boolean> {
   const lowerCandidates = lowerNameAndAliases(tag);
+  const inList = lowerCandidates.map((_c, i) => `$${i + 3}`).join(", ");
   const r = await client.query(
-    `UPDATE public.suggested_tags
+    `UPDATE suggested_tags
         SET tag_id = COALESCE(tag_id, $2)
       WHERE user_id = $1
         AND status = 'pending'
         AND (
           tag_id = $2
-          OR (tag_id IS NULL AND lower(proposed_name) = ANY($3::text[]))
+          OR (tag_id IS NULL AND lower(proposed_name) IN (${inList}))
         )`,
-    [userId, tag.id, lowerCandidates]
+    [userId, tag.id, ...lowerCandidates]
   );
   return (r.rowCount ?? 0) > 0;
 }
@@ -199,6 +200,7 @@ async function linkPendingSuggestionToTag(
  *   don't run a count subquery per insert.
  */
 export async function persistSuggestions(
+  db: DbClient,
   userId: string,
   source: SuggestionSource,
   suggestions: ExtractedTag[]
@@ -206,136 +208,102 @@ export async function persistSuggestions(
   const result: PersistSuggestionsResult = { applied: 0, pending: 0, skipped: 0 };
   if (!Array.isArray(suggestions) || suggestions.length === 0) return result;
 
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
+  // D1 serializes writes and has no interactive transactions, so the explicit
+  // BEGIN/COMMIT and the advisory FOR UPDATE locks the Postgres version used
+  // for per-user serialization / deadlock avoidance are dropped here.
 
-    await client.query(
-      "SELECT 1 FROM public.profiles WHERE id = $1 FOR UPDATE",
-      [userId]
-    );
+  // Pass 1: validate input + resolve to existing tag rows.
+  const resolved: ResolvedSuggestion[] = [];
+  for (const suggestion of suggestions) {
+    const normalizedName = normalizeTagName(suggestion.name);
+    if (!normalizedName || !isTagCategory(suggestion.category)) {
+      result.skipped++;
+      continue;
+    }
+    const cleaned: ExtractedTag = { ...suggestion, name: normalizedName };
+    const existing = await resolveExistingTag(db, cleaned);
+    resolved.push({ cleaned, existing });
+  }
 
-    // Pass 1: validate input + resolve to existing tag rows. No write locks yet.
-    const resolved: ResolvedSuggestion[] = [];
-    for (const suggestion of suggestions) {
-      const normalizedName = normalizeTagName(suggestion.name);
-      if (!normalizedName || !isTagCategory(suggestion.category)) {
+  // Pass 2: apply or queue.
+  const appliedTagIds = new Set<string>();
+  for (const { cleaned, existing } of resolved) {
+    if (cleaned.confidence === "high" && existing) {
+      if (await profileAlreadyHasTag(db, userId, existing.id)) {
+        await acceptResolvedPending(db, userId, existing);
         result.skipped++;
         continue;
       }
-      const cleaned: ExtractedTag = { ...suggestion, name: normalizedName };
-      const existing = await resolveExistingTag(client, cleaned);
-      resolved.push({ cleaned, existing });
-    }
-
-    // Lock every tag row we may write to, in deterministic UUID order, to
-    // prevent the cross-user deadlock described above.
-    const lockIds = Array.from(
-      new Set(
-        resolved
-          .filter((r) => r.existing && r.cleaned.confidence === "high")
-          .map((r) => r.existing!.id)
-      )
-    ).sort();
-    if (lockIds.length > 0) {
-      await client.query(
-        "SELECT 1 FROM public.tags WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE",
-        [lockIds]
+      const ins = await db.query(
+        `INSERT INTO profile_tags (profile_id, tag_id, source)
+              VALUES ($1, $2, 'auto')
+         ON CONFLICT (profile_id, tag_id) DO NOTHING`,
+        [userId, existing.id]
       );
-    }
-
-    // Pass 2: apply or queue.
-    const appliedTagIds = new Set<string>();
-    for (const { cleaned, existing } of resolved) {
-      if (cleaned.confidence === "high" && existing) {
-        if (await profileAlreadyHasTag(client, userId, existing.id)) {
-          await acceptResolvedPending(client, userId, existing);
-          result.skipped++;
-          continue;
-        }
-        const ins = await client.query(
-          `INSERT INTO public.profile_tags (profile_id, tag_id, source)
-                VALUES ($1, $2, 'auto')
-           ON CONFLICT (profile_id, tag_id) DO NOTHING`,
-          [userId, existing.id]
-        );
-        if ((ins.rowCount ?? 0) === 0) {
-          result.skipped++;
-          continue;
-        }
-        await acceptResolvedPending(client, userId, existing);
-        appliedTagIds.add(existing.id);
-        result.applied++;
-        continue;
-      }
-
-      // High confidence but no existing tag → defensively defer to the
-      // approval queue. profile_tags requires tag_id NOT NULL.
-      const queued: ExtractedTag =
-        cleaned.confidence === "high" && !existing
-          ? { ...cleaned, confidence: "medium" }
-          : cleaned;
-
-      if (existing) {
-        if (await profileAlreadyHasTag(client, userId, existing.id)) {
-          await acceptResolvedPending(client, userId, existing);
-          result.skipped++;
-          continue;
-        }
-        // Reuse a prior pending row (either same tag_id, or an older
-        // proposed_name that matches this tag's canonical name / alias) so we
-        // don't end up with two parallel pending entries for the same logical
-        // suggestion. linkPendingSuggestionToTag returns true iff a row was
-        // reused — in that case there's nothing left to insert.
-        if (await linkPendingSuggestionToTag(client, userId, existing)) {
-          result.skipped++;
-          continue;
-        }
-        await client.query(
-          `INSERT INTO public.suggested_tags
-              (user_id, tag_id, proposed_category, source, confidence, reason, status)
-           VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-          [userId, existing.id, queued.category, source, queued.confidence, queued.reason]
-        );
-        result.pending++;
-        continue;
-      }
-
-      if (await pendingSuggestionExistsForName(client, userId, queued.name)) {
+      if ((ins.rowCount ?? 0) === 0) {
         result.skipped++;
         continue;
       }
-      await client.query(
-        `INSERT INTO public.suggested_tags
-            (user_id, tag_id, proposed_name, proposed_category, source, confidence, reason, status)
-         VALUES ($1, NULL, $2, $3, $4, $5, $6, 'pending')`,
-        [userId, queued.name, queued.category, source, queued.confidence, queued.reason]
+      await acceptResolvedPending(db, userId, existing);
+      appliedTagIds.add(existing.id);
+      result.applied++;
+      continue;
+    }
+
+    // High confidence but no existing tag → defensively defer to the
+    // approval queue. profile_tags requires tag_id NOT NULL.
+    const queued: ExtractedTag =
+      cleaned.confidence === "high" && !existing
+        ? { ...cleaned, confidence: "medium" }
+        : cleaned;
+
+    if (existing) {
+      if (await profileAlreadyHasTag(db, userId, existing.id)) {
+        await acceptResolvedPending(db, userId, existing);
+        result.skipped++;
+        continue;
+      }
+      // Reuse a prior pending row (either same tag_id, or an older
+      // proposed_name that matches this tag's canonical name / alias) so we
+      // don't end up with two parallel pending entries for the same logical
+      // suggestion. linkPendingSuggestionToTag returns true iff a row was
+      // reused — in that case there's nothing left to insert.
+      if (await linkPendingSuggestionToTag(db, userId, existing)) {
+        result.skipped++;
+        continue;
+      }
+      await db.query(
+        `INSERT INTO suggested_tags
+            (user_id, tag_id, proposed_category, source, confidence, reason, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+        [userId, existing.id, queued.category, source, queued.confidence, queued.reason]
       );
       result.pending++;
+      continue;
     }
 
-    if (appliedTagIds.size > 0) {
-      const ids = [...appliedTagIds];
-      await client.query(
-        `UPDATE public.tags t
-            SET usage_count = sub.cnt
-           FROM (
-             SELECT tag_id, count(*)::int AS cnt
-               FROM public.profile_tags
-              WHERE tag_id = ANY($1::uuid[])
-              GROUP BY tag_id
-           ) sub
-          WHERE t.id = sub.tag_id`,
-        [ids]
-      );
+    if (await pendingSuggestionExistsForName(db, userId, queued.name)) {
+      result.skipped++;
+      continue;
     }
+    await db.query(
+      `INSERT INTO suggested_tags
+          (user_id, tag_id, proposed_name, proposed_category, source, confidence, reason, status)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, 'pending')`,
+      [userId, queued.name, queued.category, source, queued.confidence, queued.reason]
+    );
+    result.pending++;
+  }
 
-    await client.query("COMMIT");
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+  if (appliedTagIds.size > 0) {
+    const ids = [...appliedTagIds];
+    const inList = ids.map((_id, i) => `$${i + 1}`).join(", ");
+    await db.query(
+      `UPDATE tags
+          SET usage_count = (SELECT count(*) FROM profile_tags pt WHERE pt.tag_id = tags.id)
+        WHERE id IN (${inList})`,
+      [...ids]
+    );
   }
 
   return result;
@@ -425,8 +393,10 @@ function buildInterviewConversation(
  * level dedupe would otherwise paper over after the fact.
  */
 export async function extractAndPersistTags(
+  db: DbClient,
   userId: string,
-  input: ExtractAndPersistInput
+  input: ExtractAndPersistInput,
+  apiKey: string | undefined
 ): Promise<void> {
   if (!userId) {
     console.warn("extractAndPersistTags: missing userId; skipping");
@@ -454,15 +424,19 @@ export async function extractAndPersistTags(
 
   let committed = false;
   try {
-    const suggestions = await extractTags({
-      conversation,
-      profile: input.profile,
-    });
+    const suggestions = await extractTags(
+      db,
+      {
+        conversation,
+        profile: input.profile,
+      },
+      apiKey
+    );
     if (suggestions.length === 0) {
       return;
     }
 
-    const result = await persistSuggestions(userId, "interview", suggestions);
+    const result = await persistSuggestions(db, userId, "interview", suggestions);
     committed = true;
     console.log(
       `extractAndPersistTags: user=${userId} applied=${result.applied} pending=${result.pending} skipped=${result.skipped}`

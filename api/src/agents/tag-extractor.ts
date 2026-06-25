@@ -1,8 +1,7 @@
-import { pool } from "../db.js";
+import type { DbClient } from "../db.js";
 import { isTagCategory, TAG_CATEGORIES } from "../services/tags.js";
 import type { Tag, TagCategory } from "../types.js";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const MAX_TURNS = 5;
 /** Per-call cap on the Gemini fetch. Without this the request can hang, which
@@ -161,15 +160,15 @@ function tagToToolPayload(t: Tag) {
   };
 }
 
-async function searchTags(query: string, limit: number): Promise<Tag[]> {
+async function searchTags(db: DbClient, query: string, limit: number): Promise<Tag[]> {
   const trimmed = query.trim();
   if (trimmed === "") return [];
-  const r = await pool.query<Tag>(
-    `SELECT * FROM public.tags
-      WHERE name ILIKE $1 ESCAPE '\\'
+  const r = await db.query<Tag>(
+    `SELECT * FROM tags
+      WHERE name LIKE $1 ESCAPE '\\'
          OR EXISTS (
-              SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a
-               WHERE a ILIKE $1 ESCAPE '\\'
+              SELECT 1 FROM json_each(coalesce(aliases, '[]'))
+               WHERE value LIKE $1 ESCAPE '\\'
             )
       ORDER BY usage_count DESC, name ASC
       LIMIT $2`,
@@ -178,9 +177,13 @@ async function searchTags(query: string, limit: number): Promise<Tag[]> {
   return r.rows;
 }
 
-async function listPopularTags(category: TagCategory, limit: number): Promise<Tag[]> {
-  const r = await pool.query<Tag>(
-    `SELECT * FROM public.tags
+async function listPopularTags(
+  db: DbClient,
+  category: TagCategory,
+  limit: number
+): Promise<Tag[]> {
+  const r = await db.query<Tag>(
+    `SELECT * FROM tags
       WHERE category = $1
       ORDER BY usage_count DESC, name ASC
       LIMIT $2`,
@@ -196,14 +199,18 @@ async function listPopularTags(category: TagCategory, limit: number): Promise<Ta
  * outside its declared API and we don't trust whatever final answer it would
  * still emit afterward.
  */
-async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+async function executeTool(
+  db: DbClient,
+  name: string,
+  args: Record<string, unknown>
+): Promise<unknown> {
   if (name === "search_tags") {
     const rawQuery = args.query;
     if (typeof rawQuery !== "string" || rawQuery.trim() === "") {
       throw new Error(`search_tags: query is required (got ${JSON.stringify(rawQuery)})`);
     }
     const limit = clampInt(args.limit, SEARCH_TAGS_DEFAULT_LIMIT, SEARCH_TAGS_MAX_LIMIT);
-    const rows = await searchTags(rawQuery, limit);
+    const rows = await searchTags(db, rawQuery, limit);
     return { tags: rows.map(tagToToolPayload) };
   }
   if (name === "list_popular_tags") {
@@ -212,7 +219,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
       throw new Error(`list_popular_tags: invalid category ${JSON.stringify(rawCategory)}`);
     }
     const limit = clampInt(args.limit, POPULAR_TAGS_DEFAULT_LIMIT, POPULAR_TAGS_MAX_LIMIT);
-    const rows = await listPopularTags(rawCategory, limit);
+    const rows = await listPopularTags(db, rawCategory, limit);
     return { tags: rows.map(tagToToolPayload) };
   }
   if (name === "propose_new_tag") {
@@ -350,13 +357,17 @@ function normalizeExtractedTags(parsed: unknown): ExtractedTag[] {
  * error (missing API key, network failure, malformed response) so callers can
  * keep their UX flow uninterrupted.
  */
-export async function extractTags(input: ExtractInput): Promise<ExtractedTag[]> {
-  if (!GEMINI_API_KEY) {
+export async function extractTags(
+  db: DbClient,
+  input: ExtractInput,
+  apiKey: string | undefined
+): Promise<ExtractedTag[]> {
+  if (!apiKey) {
     console.warn("tag-extractor: GEMINI_API_KEY is not configured; returning empty array");
     return [];
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
   const contents: GeminiContent[] = [
     { role: "user", parts: [{ text: buildUserPrompt(input) }] },
   ];
@@ -417,7 +428,7 @@ export async function extractTags(input: ExtractInput): Promise<ExtractedTag[]> 
         // still emit a final answer based on a partially-failed view of the tag
         // dictionary, which violates the "errors → []" contract callers rely on.
         try {
-          const result = await executeTool(name, args ?? {});
+          const result = await executeTool(db, name, args ?? {});
           responseParts.push({
             functionResponse: { name, response: result as Record<string, unknown> },
           });

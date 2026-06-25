@@ -18,6 +18,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Cloudflare Wrangler
+.dev.vars
+.wrangler/
+
 # Supabase local metadata
 supabase/.temp/
 

@@ -1,109 +1,110 @@
-BEGIN;
-
 -- ============================================
--- Collabo Connect test seed data
+-- Collabo Connect test seed data (SQLite / Cloudflare D1)
+-- Ported from railway/seed.sql (Postgres).
+-- D1 runs the file statement-by-statement, so there is no BEGIN/COMMIT.
 -- Insert order:
 -- 1. better-auth user
--- 2. public.profiles
--- 3. public.postings
--- 4. public.posting_participants
--- 5. public.ai_questions
--- 6. public.ai_question_responses
+-- 2. profiles
+-- 2-a. tags / profile_tags
+-- 3. postings
+-- 4. posting_participants
+-- 5. ai_questions
+-- 6. ai_question_responses
 -- ============================================
 
 -- 1. better-auth users
-INSERT INTO "user" (id, name, email, "emailVerified", image)
+INSERT INTO "user" (id, name, email, "emailVerified", image, "createdAt", "updatedAt")
 VALUES
-  ('11111111-1111-4111-8111-111111111111', '田中 太郎', 'taro.tanaka@example.com', TRUE, 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaroTanaka'),
-  ('22222222-2222-4222-8222-222222222222', '佐藤 花子', 'hanako.sato@example.com', TRUE, 'https://api.dicebear.com/7.x/avataaars/svg?seed=HanakoSato'),
-  ('33333333-3333-4333-8333-333333333333', '鈴木 一郎', 'ichiro.suzuki@example.com', TRUE, 'https://api.dicebear.com/7.x/avataaars/svg?seed=IchiroSuzuki'),
-  ('44444444-4444-4444-8444-444444444444', '山田 美咲', 'misaki.yamada@example.com', TRUE, 'https://api.dicebear.com/7.x/avataaars/svg?seed=MisakiYamada'),
-  ('55555555-5555-4555-8555-555555555555', '高橋 健太', 'kenta.takahashi@example.com', TRUE, 'https://api.dicebear.com/7.x/avataaars/svg?seed=KentaTakahashi'),
-  ('66666666-6666-4666-8666-666666666666', '伊藤 さくら', 'sakura.ito@example.com', TRUE, 'https://api.dicebear.com/7.x/avataaars/svg?seed=SakuraIto')
+  ('11111111-1111-4111-8111-111111111111', '田中 太郎', 'taro.tanaka@example.com', 1, 'https://api.dicebear.com/7.x/avataaars/svg?seed=TaroTanaka', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('22222222-2222-4222-8222-222222222222', '佐藤 花子', 'hanako.sato@example.com', 1, 'https://api.dicebear.com/7.x/avataaars/svg?seed=HanakoSato', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('33333333-3333-4333-8333-333333333333', '鈴木 一郎', 'ichiro.suzuki@example.com', 1, 'https://api.dicebear.com/7.x/avataaars/svg?seed=IchiroSuzuki', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('44444444-4444-4444-8444-444444444444', '山田 美咲', 'misaki.yamada@example.com', 1, 'https://api.dicebear.com/7.x/avataaars/svg?seed=MisakiYamada', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('55555555-5555-4555-8555-555555555555', '高橋 健太', 'kenta.takahashi@example.com', 1, 'https://api.dicebear.com/7.x/avataaars/svg?seed=KentaTakahashi', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  ('66666666-6666-4666-8666-666666666666', '伊藤 さくら', 'sakura.ito@example.com', 1, 'https://api.dicebear.com/7.x/avataaars/svg?seed=SakuraIto', strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 ON CONFLICT (id) DO UPDATE
 SET
-  name = EXCLUDED.name,
-  email = EXCLUDED.email,
-  "emailVerified" = EXCLUDED."emailVerified",
-  image = EXCLUDED.image,
-  "updatedAt" = NOW();
+  name = excluded.name,
+  email = excluded.email,
+  "emailVerified" = excluded."emailVerified",
+  image = excluded.image,
+  "updatedAt" = strftime('%Y-%m-%dT%H:%M:%fZ','now');
 
 -- 2. app profiles
-INSERT INTO public.profiles (id, name, avatar_url, role, areas, job_type, ai_intro, joined_date)
+INSERT INTO profiles (id, name, avatar_url, role, areas, job_type, ai_intro, joined_date)
 VALUES
   (
     '11111111-1111-4111-8111-111111111111',
     '田中 太郎',
     'https://api.dicebear.com/7.x/avataaars/svg?seed=TaroTanaka',
     'フロントエンドエンジニア',
-    ARRAY['新宿', '東京'],
+    '["新宿", "東京"]',
     'フロントエンドエンジニア',
     'React と TypeScript を軸に UI 設計から実装まで担当しています。最近は AWS 認定に向けた学習を続けていて、技術相談や勉強会にも前向きです。',
-    DATE '2024-04-01'
+    '2024-04-01'
   ),
   (
     '22222222-2222-4222-8222-222222222222',
     '佐藤 花子',
     'https://api.dicebear.com/7.x/avataaars/svg?seed=HanakoSato',
     'バックエンドエンジニア',
-    ARRAY['渋谷', '世田谷'],
+    '["渋谷", "世田谷"]',
     'バックエンドエンジニア',
     'Java と Spring を使った API 開発が得意です。レビューでは堅実さを重視しており、若手メンバーの相談役になることも多いです。',
-    DATE '2023-10-01'
+    '2023-10-01'
   ),
   (
     '33333333-3333-4333-8333-333333333333',
     '鈴木 一郎',
     'https://api.dicebear.com/7.x/avataaars/svg?seed=IchiroSuzuki',
     'インフラエンジニア',
-    ARRAY['品川', '川崎'],
+    '["品川", "川崎"]',
     'インフラエンジニア',
     'AWS と Docker を中心に、安定運用しやすい基盤設計を進めています。休日は登山とコーヒー巡りで気分転換することが多いです。',
-    DATE '2024-01-01'
+    '2024-01-01'
   ),
   (
     '44444444-4444-4444-8444-444444444444',
     '山田 美咲',
     'https://api.dicebear.com/7.x/avataaars/svg?seed=MisakiYamada',
     'フルスタックエンジニア',
-    ARRAY['新宿', '中野'],
+    '["新宿", "中野"]',
     'フルスタックエンジニア',
     'Next.js と Python をまたいで、素早く仮説検証する開発が得意です。社内勉強会の企画やファシリテーションにも積極的に関わっています。',
-    DATE '2024-06-01'
+    '2024-06-01'
   ),
   (
     '55555555-5555-4555-8555-555555555555',
     '高橋 健太',
     'https://api.dicebear.com/7.x/avataaars/svg?seed=KentaTakahashi',
     'モバイルエンジニア',
-    ARRAY['横浜', 'みなとみらい'],
+    '["横浜", "みなとみらい"]',
     'モバイルエンジニア',
     'Flutter と Swift によるモバイルアプリ開発を担当しています。個人でもアプリやゲームを作っていて、実験的なアイデアを形にするのが好きです。',
-    DATE '2023-08-01'
+    '2023-08-01'
   ),
   (
     '66666666-6666-4666-8666-666666666666',
     '伊藤 さくら',
     'https://api.dicebear.com/7.x/avataaars/svg?seed=SakuraIto',
     'QAエンジニア',
-    ARRAY['渋谷', '目黒'],
+    '["渋谷", "目黒"]',
     'QAエンジニア',
     'テスト自動化の整備と品質改善の仕組みづくりを担当しています。ユーザー視点を大切にしながら、安心して出せるリリースを支えるのが役割です。',
-    DATE '2024-03-01'
+    '2024-03-01'
   )
 ON CONFLICT (id) DO UPDATE
 SET
-  name = EXCLUDED.name,
-  avatar_url = EXCLUDED.avatar_url,
-  role = EXCLUDED.role,
-  areas = EXCLUDED.areas,
-  job_type = EXCLUDED.job_type,
-  ai_intro = EXCLUDED.ai_intro,
-  joined_date = EXCLUDED.joined_date,
-  updated_at = NOW();
+  name = excluded.name,
+  avatar_url = excluded.avatar_url,
+  role = excluded.role,
+  areas = excluded.areas,
+  job_type = excluded.job_type,
+  ai_intro = excluded.ai_intro,
+  joined_date = excluded.joined_date,
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
 
 -- 2-a. tags (辞書) と profile_tags (多対多)
-INSERT INTO public.tags (name, category) VALUES
+INSERT INTO tags (name, category) VALUES
   ('React', 'skill'),
   ('TypeScript', 'skill'),
   ('AWS', 'skill'),
@@ -128,44 +129,67 @@ INSERT INTO public.tags (name, category) VALUES
   ('筋トレ', 'hobby'),
   ('カフェ巡り', 'hobby'),
   ('写真', 'hobby')
-ON CONFLICT ((lower(name))) DO NOTHING;
+ON CONFLICT (lower(name)) DO NOTHING;
 
-INSERT INTO public.profile_tags (profile_id, tag_id, source)
-SELECT p.profile_id, t.id, 'manual'
-FROM (VALUES
-  ('11111111-1111-4111-8111-111111111111'::uuid, ARRAY['React','TypeScript','甘党','AWS学習中']),
-  ('22222222-2222-4222-8222-222222222222'::uuid, ARRAY['Java','Spring','ラーメン好き','読書家']),
-  ('33333333-3333-4333-8333-333333333333'::uuid, ARRAY['AWS','Docker','登山','コーヒー']),
-  ('44444444-4444-4444-8444-444444444444'::uuid, ARRAY['Next.js','Python','猫好き','ヨガ']),
-  ('55555555-5555-4555-8555-555555555555'::uuid, ARRAY['Flutter','Swift','ゲーム好き','筋トレ']),
-  ('66666666-6666-4666-8666-666666666666'::uuid, ARRAY['テスト自動化','Selenium','カフェ巡り','写真'])
-) AS p(profile_id, tag_names)
-CROSS JOIN LATERAL unnest(p.tag_names) AS u(tag_name)
-JOIN public.tags t ON lower(t.name) = lower(u.tag_name)
+-- profile_tags: Postgres used unnest(ARRAY[...]) CROSS JOIN LATERAL.
+-- SQLite equivalent: one INSERT...SELECT per profile, iterating that profile's
+-- tag-name JSON array with json_each and joining to tags by case-insensitive
+-- name. (A single UNION ALL'd form trips wrangler's local file executor.)
+INSERT INTO profile_tags (profile_id, tag_id, source)
+SELECT '11111111-1111-4111-8111-111111111111', t.id, 'manual'
+FROM json_each('["React","TypeScript","甘党","AWS学習中"]') u
+JOIN tags t ON lower(t.name) = lower(u.value)
+ON CONFLICT (profile_id, tag_id) DO NOTHING;
+
+INSERT INTO profile_tags (profile_id, tag_id, source)
+SELECT '22222222-2222-4222-8222-222222222222', t.id, 'manual'
+FROM json_each('["Java","Spring","ラーメン好き","読書家"]') u
+JOIN tags t ON lower(t.name) = lower(u.value)
+ON CONFLICT (profile_id, tag_id) DO NOTHING;
+
+INSERT INTO profile_tags (profile_id, tag_id, source)
+SELECT '33333333-3333-4333-8333-333333333333', t.id, 'manual'
+FROM json_each('["AWS","Docker","登山","コーヒー"]') u
+JOIN tags t ON lower(t.name) = lower(u.value)
+ON CONFLICT (profile_id, tag_id) DO NOTHING;
+
+INSERT INTO profile_tags (profile_id, tag_id, source)
+SELECT '44444444-4444-4444-8444-444444444444', t.id, 'manual'
+FROM json_each('["Next.js","Python","猫好き","ヨガ"]') u
+JOIN tags t ON lower(t.name) = lower(u.value)
+ON CONFLICT (profile_id, tag_id) DO NOTHING;
+
+INSERT INTO profile_tags (profile_id, tag_id, source)
+SELECT '55555555-5555-4555-8555-555555555555', t.id, 'manual'
+FROM json_each('["Flutter","Swift","ゲーム好き","筋トレ"]') u
+JOIN tags t ON lower(t.name) = lower(u.value)
+ON CONFLICT (profile_id, tag_id) DO NOTHING;
+
+INSERT INTO profile_tags (profile_id, tag_id, source)
+SELECT '66666666-6666-4666-8666-666666666666', t.id, 'manual'
+FROM json_each('["テスト自動化","Selenium","カフェ巡り","写真"]') u
+JOIN tags t ON lower(t.name) = lower(u.value)
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 -- usage_count を全タグについて再計算（関連が無くなったタグは 0 に戻す）
-UPDATE public.tags t
-   SET usage_count = COALESCE(sub.cnt, 0)
-  FROM (
-    SELECT t2.id, count(pt.tag_id)::int AS cnt
-      FROM public.tags t2
-      LEFT JOIN public.profile_tags pt ON pt.tag_id = t2.id
-     GROUP BY t2.id
-  ) sub
- WHERE t.id = sub.id;
+UPDATE tags
+   SET usage_count = (
+     SELECT count(pt.tag_id)
+       FROM profile_tags pt
+      WHERE pt.tag_id = tags.id
+   );
 
 -- 3. postings
-INSERT INTO public.postings (id, title, category, date, date_undecided, area, is_online, description, creator_id)
+INSERT INTO postings (id, title, category, date, date_undecided, area, is_online, description, creator_id)
 VALUES
   (
     'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
     '新宿でランチ行きませんか？',
     'food',
-    DATE '2026-03-25',
-    FALSE,
+    '2026-03-25',
+    0,
     '新宿',
-    FALSE,
+    0,
     '新宿駅周辺でおすすめのラーメン屋さんを開拓したいです。お昼休みに気軽に参加してください。',
     '22222222-2222-4222-8222-222222222222'
   ),
@@ -174,9 +198,9 @@ VALUES
     'AWS勉強会をゆるく始めたい',
     'study',
     NULL,
-    TRUE,
+    1,
     'オンライン',
-    TRUE,
+    1,
     'AWS 認定や設計の相談をしながら、週 1 回ペースでオンライン勉強会をしたいです。',
     '33333333-3333-4333-8333-333333333333'
   ),
@@ -184,10 +208,10 @@ VALUES
     'aaaaaaa3-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
     '週末ボードゲーム会',
     'event',
-    DATE '2026-03-29',
-    FALSE,
+    '2026-03-29',
+    0,
     '渋谷',
-    FALSE,
+    0,
     '渋谷のボードゲームカフェで軽めのゲームを中心に遊ぶ予定です。初心者歓迎です。',
     '55555555-5555-4555-8555-555555555555'
   ),
@@ -195,10 +219,10 @@ VALUES
     'aaaaaaa4-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
     'React 最新動向シェア会',
     'study',
-    DATE '2026-03-27',
-    FALSE,
+    '2026-03-27',
+    0,
     '品川',
-    FALSE,
+    0,
     'React 19 や周辺エコシステムのアップデートを持ち寄って情報交換したいです。',
     '11111111-1111-4111-8111-111111111111'
   ),
@@ -206,27 +230,27 @@ VALUES
     'aaaaaaa5-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
     '横浜で作業カフェ会',
     'food',
-    DATE '2026-03-30',
-    FALSE,
+    '2026-03-30',
+    0,
     '横浜',
-    FALSE,
+    0,
     '1 時間ほど各自作業しつつ、その後に近況共有できるメンバーを募集中です。',
     '66666666-6666-4666-8666-666666666666'
   )
 ON CONFLICT (id) DO UPDATE
 SET
-  title = EXCLUDED.title,
-  category = EXCLUDED.category,
-  date = EXCLUDED.date,
-  date_undecided = EXCLUDED.date_undecided,
-  area = EXCLUDED.area,
-  is_online = EXCLUDED.is_online,
-  description = EXCLUDED.description,
-  creator_id = EXCLUDED.creator_id,
-  updated_at = NOW();
+  title = excluded.title,
+  category = excluded.category,
+  date = excluded.date,
+  date_undecided = excluded.date_undecided,
+  area = excluded.area,
+  is_online = excluded.is_online,
+  description = excluded.description,
+  creator_id = excluded.creator_id,
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now');
 
 -- 4. posting participants
-INSERT INTO public.posting_participants (id, posting_id, user_id, action)
+INSERT INTO posting_participants (id, posting_id, user_id, action)
 VALUES
   ('bbbbbbb1-bbbb-4bbb-8bbb-bbbbbbbbbbb1', 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1', '11111111-1111-4111-8111-111111111111', 'join'),
   ('bbbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2', 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1', '44444444-4444-4444-8444-444444444444', 'interested'),
@@ -240,43 +264,43 @@ VALUES
   ('bbbbbb10-bbbb-4bbb-8bbb-bbbbbbbbb010', 'aaaaaaa5-aaaa-4aaa-8aaa-aaaaaaaaaaa5', '22222222-2222-4222-8222-222222222222', 'interested'),
   ('bbbbbb11-bbbb-4bbb-8bbb-bbbbbbbbb011', 'aaaaaaa5-aaaa-4aaa-8aaa-aaaaaaaaaaa5', '55555555-5555-4555-8555-555555555555', 'join')
 ON CONFLICT (posting_id, user_id) DO UPDATE
-SET action = EXCLUDED.action;
+SET action = excluded.action;
 
 -- 5. AI questions
-INSERT INTO public.ai_questions (id, question, options, date)
+INSERT INTO ai_questions (id, question, options, date)
 VALUES
   (
     'ccccccc1-cccc-4ccc-8ccc-ccccccccccc1',
     '最近、現場で一番よく使っている技術は何ですか？',
-    ARRAY['React / Vue などフロントエンド', 'Java / Python などバックエンド', 'AWS / GCP などクラウド', 'その他'],
-    CURRENT_DATE
+    '["React / Vue などフロントエンド", "Java / Python などバックエンド", "AWS / GCP などクラウド", "その他"]',
+    date('now')
   ),
   (
     'ccccccc2-cccc-4ccc-8ccc-ccccccccccc2',
     '週末の過ごし方で一番多いのは？',
-    ARRAY['家でゆっくり', 'カフェや外出', 'スポーツ・アウトドア', '勉強・スキルアップ'],
-    CURRENT_DATE - INTERVAL '1 day'
+    '["家でゆっくり", "カフェや外出", "スポーツ・アウトドア", "勉強・スキルアップ"]',
+    date('now','-1 day')
   ),
   (
     'ccccccc3-cccc-4ccc-8ccc-ccccccccccc3',
     '社内の人ともっと話してみたいテーマは？',
-    ARRAY['技術・キャリア相談', '趣味・プライベート', 'おすすめのお店・スポット', '業界ニュース・トレンド'],
-    CURRENT_DATE - INTERVAL '2 day'
+    '["技術・キャリア相談", "趣味・プライベート", "おすすめのお店・スポット", "業界ニュース・トレンド"]',
+    date('now','-2 day')
   ),
   (
     'ccccccc4-cccc-4ccc-8ccc-ccccccccccc4',
     '今期、個人的に一番伸ばしたいスキルは？',
-    ARRAY['設計力', '実装スピード', 'クラウド / インフラ', 'ファシリテーション'],
-    CURRENT_DATE - INTERVAL '3 day'
+    '["設計力", "実装スピード", "クラウド / インフラ", "ファシリテーション"]',
+    date('now','-3 day')
   )
 ON CONFLICT (id) DO UPDATE
 SET
-  question = EXCLUDED.question,
-  options = EXCLUDED.options,
-  date = EXCLUDED.date;
+  question = excluded.question,
+  options = excluded.options,
+  date = excluded.date;
 
 -- 6. AI question responses
-INSERT INTO public.ai_question_responses (id, question_id, user_id, answer)
+INSERT INTO ai_question_responses (id, question_id, user_id, answer)
 VALUES
   (
     'ddddddd1-dddd-4ddd-8ddd-ddddddddddd1',
@@ -315,6 +339,4 @@ VALUES
     '実装スピードを上げたいです。プロトタイプを短期間で出せる力をもっと伸ばしたいです。'
   )
 ON CONFLICT (question_id, user_id) DO UPDATE
-SET answer = EXCLUDED.answer;
-
-COMMIT;
+SET answer = excluded.answer;
