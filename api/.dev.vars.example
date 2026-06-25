@@ -14,8 +14,12 @@ CRON_SECRET=your-cron-secret
 # RESEND_API_KEY=re_xxxx
 # RESEND_FROM=onboarding@resend.dev
 
-# Non-secret overrides for local dev (also configurable in wrangler.toml [vars]).
-# NODE_ENV=development
-# BETTER_AUTH_URL=http://localhost:8787
-# BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8080,http://localhost:5173
-# CORS_ORIGINS=http://localhost:8080,http://localhost:5173
+# Local-dev overrides. `.dev.vars` takes precedence over wrangler.toml [vars]
+# for `wrangler dev`, so these flip the production defaults (NODE_ENV=production,
+# remote origins) back to development. Without NODE_ENV=development, auth.ts
+# takes the production branch locally: Secure cookies on http://localhost and a
+# magic-link "email not configured" error when RESEND_API_KEY is unset.
+NODE_ENV=development
+BETTER_AUTH_URL=http://localhost:8787
+BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8080,http://localhost:5173
+CORS_ORIGINS=http://localhost:8080,http://localhost:5173

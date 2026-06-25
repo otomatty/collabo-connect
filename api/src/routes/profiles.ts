@@ -399,6 +399,9 @@ router.put("/me", requireAuth, async (c) => {
       i++;
     }
     if (updates.length > 0) {
+      // Postgres bumped updated_at via a BEFORE UPDATE trigger; D1 has none, so
+      // do it here whenever a profiles-row update actually runs.
+      updates.push("updated_at = now()");
       values.push(userId);
       await db.query(
         `UPDATE profiles SET ${updates.join(", ")} WHERE id = $${i}`,

@@ -164,6 +164,8 @@ router.put("/:id", requireAuth, async (c) => {
     const [enriched] = await enrichPostings(db, check.rows);
     return c.json(enriched);
   }
+  // Bump updated_at in-app (no DB trigger on D1) now that a real update runs.
+  updates.push("updated_at = now()");
   values.push(id);
   const q = `UPDATE postings SET ${updates.join(", ")} WHERE id = $${i} RETURNING *`;
   const r = await db.query<Posting>(q, values);
