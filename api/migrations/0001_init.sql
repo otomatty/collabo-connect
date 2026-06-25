@@ -12,7 +12,12 @@
 
 -- ---- 1. profiles ----------------------------------------------------------
 CREATE TABLE IF NOT EXISTS profiles (
-  id TEXT PRIMARY KEY,
+  -- id mirrors the Better Auth user.id. FK + ON DELETE CASCADE so deleting an
+  -- auth user cleans up the profile and, transitively, that user's postings,
+  -- participations, profile_tags, etc. (SQLite allows referencing the "user"
+  -- table even though it is created later in this migration; the FK is only
+  -- enforced at row time, by which point "user" exists.)
+  id TEXT PRIMARY KEY REFERENCES "user"("id") ON DELETE CASCADE,
   name TEXT NOT NULL,
   avatar_url TEXT DEFAULT '',
   role TEXT DEFAULT '',

@@ -158,6 +158,13 @@ router.post("/:id/accept", requireAuth, async (c) => {
       return c.json({ error: "Suggested tag has neither tag_id nor proposed_name" }, 500);
     }
 
+    // NOTE (atomicity tradeoff): the claim and the follow-up writes below
+    // (profile_tags insert, tag backfill, usage_count) are separate statements.
+    // D1 has no interactive transactions, so a failure mid-sequence could leave
+    // the suggestion 'accepted' without its profile_tags link. Accepted as a
+    // documented prototype tradeoff (writes are idempotent on retry-by-reaccept,
+    // and this path is low-volume); a fully atomic version would need db.batch()
+    // plus compensation.
     await db.query(
       `INSERT INTO profile_tags (profile_id, tag_id, source)
             VALUES ($1, $2, 'auto')

@@ -101,6 +101,12 @@ export async function upsertTag(
  * prototype: a single user double-submitting their own profile form concurrently
  * is rare and self-correcting on the next save. A fully serialized fix would need
  * a per-user single-writer (e.g. a Durable Object) — out of scope here.
+ *
+ * Atomicity tradeoff: the DELETE / INSERTs / usage_count UPDATE run as separate
+ * statements (D1 has no interactive transactions), so a mid-sequence failure can
+ * leave profile_tags partially updated. Accepted for the prototype — the next
+ * successful save reconciles it. A fully atomic version would batch these via
+ * db.batch().
  */
 export async function syncProfileTags(
   client: DbClient,

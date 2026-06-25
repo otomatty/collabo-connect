@@ -211,6 +211,11 @@ export async function persistSuggestions(
   // D1 serializes writes and has no interactive transactions, so the explicit
   // BEGIN/COMMIT and the advisory FOR UPDATE locks the Postgres version used
   // for per-user serialization / deadlock avoidance are dropped here.
+  // Atomicity tradeoff: the inserts/updates below run as separate statements, so
+  // a mid-sequence failure can partially commit (e.g. a profile_tag applied but
+  // usage_count not refreshed). Accepted as a documented prototype tradeoff —
+  // writes are idempotent (ON CONFLICT DO NOTHING / recomputed counts) so a
+  // re-run reconciles; a fully atomic version would need db.batch().
 
   // Pass 1: validate input + resolve to existing tag rows.
   const resolved: ResolvedSuggestion[] = [];
