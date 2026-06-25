@@ -5,6 +5,26 @@ import type { DbClient } from "../db.js";
 import type { AppContext } from "../bindings.js";
 import type { Posting, Profile, PostingParticipant, PostingWithDetails } from "../types.js";
 
+/** Posting columns stored as INTEGER booleans in D1. */
+const BOOLEAN_FIELDS = new Set(["date_undecided", "is_online"]);
+
+/**
+ * Coerce an untrusted boolean-ish input to a real boolean before binding.
+ * D1's INTEGER column would otherwise store a raw string like "false" verbatim
+ * (and hydrateRow only un-maps numeric 0/1), so the API would return a truthy
+ * string. Accepts booleans, 0/1, and "true"/"false"/"1"/"0" strings.
+ */
+function toBool(value: unknown, fallback = false): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (s === "true" || s === "1") return true;
+    if (s === "false" || s === "0" || s === "") return false;
+  }
+  return fallback;
+}
+
 async function enrichPostings(
   db: DbClient,
   postings: Posting[]
@@ -117,9 +137,9 @@ router.post("/", requireAuth, async (c) => {
       title,
       category,
       date ?? null,
-      date_undecided ?? false,
+      toBool(date_undecided),
       area,
-      is_online ?? false,
+      toBool(is_online),
       description ?? "",
       userId,
     ]
@@ -156,7 +176,7 @@ router.put("/:id", requireAuth, async (c) => {
   for (const key of allowed) {
     if (key in body) {
       updates.push(`${key} = $${i}`);
-      values.push(body[key]);
+      values.push(BOOLEAN_FIELDS.has(key) ? toBool(body[key]) : body[key]);
       i++;
     }
   }
