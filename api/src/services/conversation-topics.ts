@@ -165,7 +165,8 @@ export async function saveConversationTopics(
             conversation_topics_updated_at = CASE
               WHEN conversation_topics IS DISTINCT FROM $2 THEN now()
               ELSE conversation_topics_updated_at
-            END
+            END,
+            updated_at = now()
       WHERE id = $1`,
     [userId, JSON.stringify(topics)]
   );

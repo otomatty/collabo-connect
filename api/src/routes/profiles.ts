@@ -358,6 +358,15 @@ router.put("/me", requireAuth, async (c) => {
       }
     }
 
+    // Postgres `text[]` rejected non-array values; D1 stores `areas` as TEXT and
+    // would persist whatever is bound, so a later read could hydrate a string/
+    // object and crash `.map`/`.join` consumers. Enforce the array-of-strings shape.
+    if ("areas" in body) {
+      if (!Array.isArray(body.areas) || !body.areas.every((a) => typeof a === "string")) {
+        return c.json({ error: "areas must be an array of strings" }, 400);
+      }
+    }
+
     let parsedTopics: ConversationTopic[] | undefined;
     if ("conversation_topics" in body) {
       const parsed = parseConversationTopics(body.conversation_topics);
