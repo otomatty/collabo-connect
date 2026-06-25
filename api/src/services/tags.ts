@@ -92,6 +92,15 @@ export async function upsertTag(
  *
  * Also refreshes tags.usage_count for every affected tag so popular-tag ranking
  * stays accurate.
+ *
+ * Concurrency tradeoff: the Postgres version held a per-user `SELECT ... FOR
+ * UPDATE` lock so this read/modify/write ran atomically. D1 has no interactive
+ * transactions or row locks, so two overlapping `PUT /api/profiles/me` for the
+ * SAME user can read the same current set and apply independent inserts/deletes
+ * (e.g. [A]→[A,B] and [A]→[A,C] may settle as [A,B,C]). This is accepted for the
+ * prototype: a single user double-submitting their own profile form concurrently
+ * is rare and self-correcting on the next save. A fully serialized fix would need
+ * a per-user single-writer (e.g. a Durable Object) — out of scope here.
  */
 export async function syncProfileTags(
   client: DbClient,
