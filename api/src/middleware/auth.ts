@@ -1,27 +1,24 @@
-import type { Request, Response, NextFunction } from "express";
-import { fromNodeHeaders } from "better-auth/node";
-import { auth } from "../auth.js";
+import type { MiddlewareHandler } from "hono";
+import { getAuth } from "../auth.js";
+import type { AppContext } from "../bindings.js";
 
-/** Require Better Auth session (cookie). Set req.userId to session.user.id. Returns 401 if no session. */
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(req.headers),
-  });
+/** Require a Better Auth session (cookie). Sets `userId` in context. 401 if absent. */
+export const requireAuth: MiddlewareHandler<AppContext> = async (c, next) => {
+  const auth = getAuth(c.env);
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session?.user?.id) {
-    res.status(401).json({ error: "Not authenticated" });
-    return;
+    return c.json({ error: "Not authenticated" }, 401);
   }
-  req.userId = session.user.id;
-  next();
-}
+  c.set("userId", session.user.id);
+  await next();
+};
 
-/** Optional auth: set req.userId if session exists. */
-export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(req.headers),
-  });
+/** Optional auth: set `userId` in context when a session exists, else continue. */
+export const optionalAuth: MiddlewareHandler<AppContext> = async (c, next) => {
+  const auth = getAuth(c.env);
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (session?.user?.id) {
-    req.userId = session.user.id;
+    c.set("userId", session.user.id);
   }
-  next();
-}
+  await next();
+};

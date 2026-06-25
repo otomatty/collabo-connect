@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from "express";
+import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth.js";
 import {
   buildInterviewSystemPrompt,
@@ -6,9 +6,10 @@ import {
 } from "../prompts/index.js";
 import { extractAndPersistTags } from "../services/tag-suggestions.js";
 import { generateAndSaveConversationTopics } from "../services/conversation-topics.js";
+import type { AppContext } from "../bindings.js";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_TIMEOUT_MS = 30_000;
 
 interface ChatMessage {
   role: "ai" | "user";
@@ -32,11 +33,15 @@ interface RequestBody {
   personCard?: string;
 }
 
-function buildGeminiUrl(): string {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+function buildGeminiUrl(apiKey: string): string {
+  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 }
 
-async function callGemini(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string
+): Promise<string> {
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: [{ text: userPrompt }] }],
@@ -46,17 +51,27 @@ async function callGemini(systemPrompt: string, userPrompt: string): Promise<str
       responseMimeType: "application/json",
     },
   };
-  const res = await fetch(buildGeminiUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(buildGeminiUrl(apiKey), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     const errText = await res.text();
     console.error("Gemini API error:", errText);
     throw new Error(`Gemini API error: ${res.status}`);
   }
-  const data = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 }
 
@@ -123,37 +138,58 @@ function parseIntroduction(raw: string): string {
   throw new Error("Gemini response does not include introduction text");
 }
 
-const router = Router();
+const router = new Hono<AppContext>();
 
-router.post("/", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  if (!GEMINI_API_KEY) {
-    res.status(503).json({ error: "GEMINI_API_KEY is not configured" });
-    return;
+router.post("/", requireAuth, async (c) => {
+  const apiKey = c.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return c.json({ error: "GEMINI_API_KEY is not configured" }, 503);
   }
+  const db = c.get("db");
   try {
-    const body = req.body as RequestBody;
+    const body = (await c.req.json().catch(() => ({}))) as RequestBody;
     const { action, profile, messages, userReply, pastResponses, personCard } = body;
+
+    // Validate up front so a malformed payload yields 400 rather than a 500 from
+    // build*Prompt(profile, ...) / messages.filter(...) downstream.
+    const isStringArray = (v: unknown): v is string[] =>
+      Array.isArray(v) && v.every((x) => typeof x === "string");
+    if (
+      !["start", "reply", "generate"].includes(action) ||
+      !profile ||
+      typeof profile !== "object" ||
+      !isStringArray(profile.areas) ||
+      !isStringArray(profile.tags) ||
+      !Array.isArray(messages)
+    ) {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
 
     if (action === "start") {
       const systemPrompt = buildInterviewSystemPrompt(profile, pastResponses);
       const userPrompt = `インタビューを開始してください。まずは軽く挨拶して、最初の質問をしてください。
 前回答やプロフィールで既にわかっていることは繰り返さず、それを踏まえた上で、まだ知らない側面を引き出す質問をしてください。
 personCard は前回答・プロフィールから初期構築してください。`;
-      const raw = await callGemini(systemPrompt, userPrompt);
-      const parsed = parseJsonFromResponse(raw) as { message: string; options: string[]; personCard: string };
-      res.json({
+      const raw = await callGemini(systemPrompt, userPrompt, apiKey);
+      const parsed = parseJsonFromResponse(raw) as {
+        message: string;
+        options: string[];
+        personCard: string;
+      };
+      if (typeof parsed.message !== "string" || !parsed.message.trim()) {
+        return c.json({ error: "Invalid response from AI" }, 502);
+      }
+      return c.json({
         message: parsed.message,
-        options: parsed.options ?? [],
-        personCard: parsed.personCard ?? "",
+        options: Array.isArray(parsed.options) ? parsed.options : [],
+        personCard: typeof parsed.personCard === "string" ? parsed.personCard : "",
         done: false,
       });
-      return;
     }
 
     if (action === "reply") {
       if (typeof userReply !== "string" || !userReply.trim()) {
-        res.status(400).json({ error: "userReply is required for reply action" });
-        return;
+        return c.json({ error: "userReply is required for reply action" }, 400);
       }
       const questionCount = messages.filter((m) => m.role === "ai").length;
       const systemPrompt = buildInterviewSystemPrompt(profile, pastResponses, personCard);
@@ -169,49 +205,54 @@ personCard は最終版も出力してください。`
 人物カードで把握していることとは違う切り口で、その人の解像度をさらに上げるような質問をしてください。
 personCard には今回の回答で得られた新情報を追記してください。`;
       const userPrompt = `## 直近の会話\n${recentContext}\n\n## 指示\n${instruction}`;
-      const raw = await callGemini(systemPrompt, userPrompt);
-      const parsed = parseJsonFromResponse(raw) as { message: string; options: string[]; personCard: string };
-      res.json({
+      const raw = await callGemini(systemPrompt, userPrompt, apiKey);
+      const parsed = parseJsonFromResponse(raw) as {
+        message: string;
+        options: string[];
+        personCard: string;
+      };
+      if (typeof parsed.message !== "string" || !parsed.message.trim()) {
+        return c.json({ error: "Invalid response from AI" }, 502);
+      }
+      return c.json({
         message: parsed.message,
-        options: questionCount >= 5 ? [] : (parsed.options ?? []),
-        personCard: parsed.personCard ?? personCard ?? "",
+        options: questionCount >= 5 ? [] : Array.isArray(parsed.options) ? parsed.options : [],
+        personCard:
+          typeof parsed.personCard === "string" ? parsed.personCard : personCard ?? "",
         done: questionCount >= 5,
       });
-      return;
     }
 
     if (action === "generate") {
       const systemPrompt = buildGenerateSystemPrompt(profile, pastResponses, personCard);
       const userPrompt = `人物カードと前回答の全てを踏まえて、自己紹介を作成してください。`;
-      const raw = await callGemini(systemPrompt, userPrompt);
+      const raw = await callGemini(systemPrompt, userPrompt, apiKey);
       const introduction = parseIntroduction(raw);
-      res.json({ introduction });
 
-      const userId = req.userId;
+      const userId = c.get("userId");
       if (userId) {
-        // Fire-and-forget: extractAndPersistTags swallows its own errors so
-        // a failure in the tag agent never blocks or breaks the interview
-        // response above.
-        void extractAndPersistTags(userId, {
-          messages,
-          personCard,
-          profile,
-        });
-        // Same fire-and-forget contract for conversation topics: failures are
-        // logged inside the service and never null out existing topics.
-        void generateAndSaveConversationTopics(userId, {
-          profile,
-          personCard,
-          aiIntro: introduction,
-        });
+        // Fire-and-forget background work. On Workers this must be registered
+        // with waitUntil so the runtime keeps the isolate alive until it
+        // settles; both services swallow their own errors.
+        c.executionCtx.waitUntil(
+          extractAndPersistTags(db, userId, { messages, personCard, profile }, apiKey)
+        );
+        c.executionCtx.waitUntil(
+          generateAndSaveConversationTopics(
+            db,
+            userId,
+            { profile, personCard, aiIntro: introduction },
+            apiKey
+          )
+        );
       }
-      return;
+      return c.json({ introduction });
     }
 
-    res.status(400).json({ error: "Invalid action" });
+    return c.json({ error: "Invalid action" }, 400);
   } catch (err) {
     console.error("ai-interview error:", err);
-    res.status(500).json({ error: (err as Error).message });
+    return c.json({ error: (err as Error).message }, 500);
   }
 });
 

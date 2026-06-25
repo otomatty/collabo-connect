@@ -1,67 +1,69 @@
-import { Router, type Request, type Response } from "express";
-import { pool } from "../db.js";
+import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth.js";
-import type { AiQuestion, AiQuestionResponse } from "../types.js";
+import { aiQuestionJsonObject } from "../sql-helpers.js";
+import type { AppContext } from "../bindings.js";
+import type { AiQuestionResponse } from "../types.js";
 
-const router = Router();
+const router = new Hono<AppContext>();
 
 /** POST /api/ai-question-responses - body: { question_id, answer }. Upsert by (question_id, user_id). */
-router.post("/", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const { question_id: questionId, answer } = req.body;
-  if (!questionId || typeof answer !== "string") {
-    res.status(400).json({ error: "question_id and answer are required" });
-    return;
+router.post("/", requireAuth, async (c) => {
+  const db = c.get("db");
+  const userId = c.get("userId")!;
+  const body = (await c.req.json().catch(() => ({}))) as {
+    question_id?: string;
+    answer?: unknown;
+  };
+  const questionId = body.question_id;
+  const answer = body.answer;
+  if (!questionId || typeof answer !== "string" || !answer.trim()) {
+    return c.json({ error: "question_id and answer are required" }, 400);
   }
-  await pool.query(
-    `INSERT INTO public.ai_question_responses (question_id, user_id, answer)
+  await db.query(
+    `INSERT INTO ai_question_responses (question_id, user_id, answer)
      VALUES ($1, $2, $3)
      ON CONFLICT (question_id, user_id) DO UPDATE SET answer = $3`,
     [questionId, userId, answer.trim()]
   );
-  const r = await pool.query<AiQuestionResponse>(
-    "SELECT * FROM public.ai_question_responses WHERE question_id = $1 AND user_id = $2",
+  const r = await db.query<AiQuestionResponse>(
+    "SELECT * FROM ai_question_responses WHERE question_id = $1 AND user_id = $2",
     [questionId, userId]
   );
-  res.status(201).json(r.rows[0]);
+  return c.json(r.rows[0], 201);
 });
 
 /** PUT /api/ai-question-responses/:id - update own response */
-router.put("/:id", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const { id } = req.params;
-  const { answer } = req.body;
-  if (typeof answer !== "string") {
-    res.status(400).json({ error: "answer is required" });
-    return;
+router.put("/:id", requireAuth, async (c) => {
+  const db = c.get("db");
+  const userId = c.get("userId")!;
+  const id = c.req.param("id");
+  const body = (await c.req.json().catch(() => ({}))) as { answer?: unknown };
+  if (typeof body.answer !== "string" || !body.answer.trim()) {
+    return c.json({ error: "answer is required" }, 400);
   }
-  const r = await pool.query<AiQuestionResponse>(
-    "UPDATE public.ai_question_responses SET answer = $1 WHERE id = $2 AND user_id = $3 RETURNING *",
-    [answer.trim(), id, userId]
+  const r = await db.query<AiQuestionResponse>(
+    "UPDATE ai_question_responses SET answer = $1 WHERE id = $2 AND user_id = $3 RETURNING *",
+    [body.answer.trim(), id, userId]
   );
   if (r.rows.length === 0) {
-    res.status(404).json({ error: "Response not found" });
-    return;
+    return c.json({ error: "Response not found" }, 404);
   }
-  res.json(r.rows[0]);
+  return c.json(r.rows[0]);
 });
 
-/** GET /api/ai-question-responses/me - current user's responses with question (for "my responses" list) */
-router.get("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
-  const userId = req.userId!;
-  const r = await pool.query(
-    `SELECT r.*, row_to_json(q) as question
-     FROM public.ai_question_responses r
-     LEFT JOIN public.ai_questions q ON r.question_id = q.id
+/** GET /api/ai-question-responses/me - current user's responses with question */
+router.get("/me", requireAuth, async (c) => {
+  const db = c.get("db");
+  const userId = c.get("userId")!;
+  const r = await db.query(
+    `SELECT r.*, ${aiQuestionJsonObject("q")} as question
+     FROM ai_question_responses r
+     LEFT JOIN ai_questions q ON r.question_id = q.id
      WHERE r.user_id = $1
      ORDER BY r.created_at DESC`,
     [userId]
   );
-  const rows = r.rows.map((row: { question: AiQuestion }) => ({
-    ...row,
-    question: row.question as AiQuestion,
-  }));
-  res.json(rows);
+  return c.json(r.rows);
 });
 
 export default router;

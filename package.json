@@ -16,7 +16,9 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
-    "supabase:types": "supabase gen types typescript --project-id zwuxdcbgztpfgoktdkaq > src/types/supabase.ts"
+    "supabase:types": "supabase gen types typescript --project-id zwuxdcbgztpfgoktdkaq > src/types/supabase.ts",
+    "cf:deploy": "npm run build && npx wrangler deploy",
+    "cf:dev": "npx wrangler dev"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

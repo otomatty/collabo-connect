@@ -1,6 +1,7 @@
 /**
- * Railway API client. All data (profiles, postings, etc.) goes through this.
- * Auth: Better Auth session cookie is sent with credentials: "include".
+ * API client (Cloudflare Workers API). All data (profiles, postings, etc.) goes
+ * through this. Auth: Better Auth session cookie is sent with credentials:
+ * "include". Set VITE_API_URL to the deployed Worker origin.
  */
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -18,7 +19,7 @@ export interface ApiOptions {
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const base = getApiUrl();
   if (!base) {
-    throw new Error("VITE_API_URL is not set. Configure the API URL for Railway.");
+    throw new Error("VITE_API_URL is not set. Configure the Cloudflare Worker API URL.");
   }
   const url = path.startsWith("/") ? `${base}${path}` : `${base}/${path}`;
   const headers: Record<string, string> = {

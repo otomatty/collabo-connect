@@ -50,7 +50,7 @@
 
 ### 3.1 ローカル（api）
 
-`api/.env` に追加する例：
+`api/.dev.vars` に追加する例（`wrangler dev` が読み込みます）：
 
 ```env
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
@@ -61,12 +61,15 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
 - `RESEND_API_KEY` を設定すると、マジックリンクが Resend 経由で送信される（サンドボックス時は登録メールのみ）。
 - 設定しない場合、開発時は **マジックリンクの URL が API のコンソールログに出力**され、メールは送られない（`[Dev] Magic link for ... : <url>`）。
 
-### 3.2 Railway（本番 API）
+### 3.2 Cloudflare Workers（本番 API）
 
-1. Railway ダッシュボードで **api** サービスを開く。
-2. **Variables** で以下を追加：
-   - `RESEND_API_KEY` = 作成した API キー
-   - （任意）`RESEND_FROM` = 認証済みドメインの送信元アドレス
+API（`api/`）の Worker にシークレットとして設定します：
+
+```sh
+cd api
+npx wrangler secret put RESEND_API_KEY     # 作成した API キー
+# 送信元を変える場合は wrangler.toml の [vars] RESEND_FROM を更新（認証済みドメインのアドレス）
+```
 
 本番（`NODE_ENV=production`）で `RESEND_API_KEY` が未設定の場合、マジックリンク要求時にエラーになり、ユーザーには「Email sending is not configured」が返ります。
 
@@ -80,8 +83,8 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
 
 メール内の URL をクリックしたあと、認証されずログインページに戻ってしまう場合は、以下を確認してください。
 
-- **`BETTER_AUTH_URL`（api の環境変数）**: 必ず **API のベース URL**（`/api/auth` を提供しているサーバーのオリジン）を指定すること。例: `https://your-api.up.railway.app`。ここをフロントの URL（例: Vercel のアプリ URL）にしてしまうと、リンクがフロントを指してしまい、verify が実行されずセッションが作られません。
-- **`BETTER_AUTH_TRUSTED_ORIGINS`**: 認証後にリダイレクトする先のオリジンを列挙します。**フロントのオリジン**（ユーザーが開くアプリの URL）を必ず含めてください。例: `https://your-app.vercel.app` や `http://localhost:8080`。含まれていないと、verify 後のリダイレクトが拒否され、アプリ画面に遷移できません。
+- **`BETTER_AUTH_URL`（api の環境変数 / `api/wrangler.toml` の `[vars]`）**: 必ず **API のベース URL**（`/api/auth` を提供している Worker のオリジン）を指定すること。例: `https://collabo-connect-api.<account>.workers.dev`。ここをフロントの URL にしてしまうと、リンクがフロントを指してしまい、verify が実行されずセッションが作られません。
+- **`BETTER_AUTH_TRUSTED_ORIGINS`**: 認証後にリダイレクトする先のオリジンを列挙します。**フロントのオリジン**（ユーザーが開くアプリの URL）を必ず含めてください。例: `https://collabo-connect.pages.dev` や `http://localhost:8080`。含まれていないと、verify 後のリダイレクトが拒否され、アプリ画面に遷移できません。
 - **本番で API とフロントが別オリジンの場合**: セッション Cookie が別オリジンへ送信されるよう、本番では `api/src/auth.ts` で `defaultCookieAttributes`（`sameSite: "none"`, `secure: true`）を設定しています。フロントの `auth-client` では `fetchOptions: { credentials: "include" }` を指定して Cookie を送るようにしています。
 
 ## 5. チェックリスト
@@ -89,14 +92,14 @@ RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
 - [ ] Resend アカウント作成
 - [ ] API キー作成（Sending access）し、値を安全に保管
 - [ ] 本番用: 送信ドメインを追加し、DNS 設定・Verify 完了
-- [ ] ローカル: `api/.env` に `RESEND_API_KEY`（と必要なら `RESEND_FROM`）を設定
-- [ ] Railway: api サービスの Variables に `RESEND_API_KEY`（と必要なら `RESEND_FROM`）を設定
+- [ ] ローカル: `api/.dev.vars` に `RESEND_API_KEY`（と必要なら `RESEND_FROM`）を設定
+- [ ] 本番: `cd api && npx wrangler secret put RESEND_API_KEY`（送信元は `wrangler.toml` の `RESEND_FROM`）
 
 ## 6. トラブルシューティング
 
 | 現象 | 確認すること |
 |------|----------------|
-| 本番で「Email sending is not configured」 | api の `RESEND_API_KEY` が設定されているか。Railway の Variables を確認。 |
+| 本番で「Email sending is not configured」 | api の `RESEND_API_KEY` が設定されているか。`npx wrangler secret list`（api ディレクトリ）で確認。 |
 | メールが届かない | サンドボックス時は送信先が Resend に登録したメールか。迷惑メールフォルダも確認。 |
 | Resend API エラー（4xx/5xx） | ダッシュボードの [Logs](https://resend.com/emails) で該当送信のエラー内容を確認。`RESEND_FROM` が未認証ドメインになっていないか。 |
 | 開発でメールを送りたくない | `RESEND_API_KEY` を設定しなければ、ログに URL が出力されるだけ。 |

@@ -1,5 +1,4 @@
-import type { PoolClient } from "pg";
-import { pool } from "../db.js";
+import type { DbClient } from "../db.js";
 import type { Tag, TagCategory } from "../types.js";
 
 export const TAG_CATEGORIES: TagCategory[] = [
@@ -41,16 +40,16 @@ export function normalizeTagName(raw: string): string | null {
  * Ensures "React" / "react" / "REACT" resolve to the same canonical entry.
  */
 export async function findTagByName(
-  client: PoolClient | typeof pool,
+  client: DbClient,
   name: string
 ): Promise<Tag | null> {
   const r = await client.query<Tag>(
     `SELECT *
-       FROM public.tags
+       FROM tags
       WHERE lower(name) = lower($1)
          OR EXISTS (
-              SELECT 1 FROM unnest(coalesce(aliases, '{}'::text[])) a
-               WHERE lower(a) = lower($1)
+              SELECT 1 FROM json_each(coalesce(aliases, '[]'))
+               WHERE lower(value) = lower($1)
             )
       LIMIT 1`,
     [name]
@@ -61,43 +60,26 @@ export async function findTagByName(
 /**
  * Ensure a tag exists by name. If missing, INSERT it with the given category and creator.
  *
- * Uses a CTE with ON CONFLICT DO NOTHING and a fallback SELECT to avoid
- * bumping updated_at on conflict. The uniqueness target is `(lower(name))` —
- * see the case-insensitive unique index `tags_name_lower_unique_idx` in
- * schema.sql.
- *
- * Concurrent-insert race: under READ COMMITTED a single statement's snapshot
- * may not yet include a row another transaction committed between our
- * snapshot and INSERT. In that case ON CONFLICT DO NOTHING suppresses the
- * insert and the UNION'd SELECT also misses the row. We handle that by
- * re-running findTagByName (a fresh statement → fresh snapshot) which will
- * see the newly committed row.
+ * The uniqueness target is the case-insensitive `tags_name_lower_unique_idx`
+ * (an index on `lower(name)`). We INSERT ... ON CONFLICT DO NOTHING, then
+ * re-resolve via findTagByName — a fresh statement so it also sees a row a
+ * concurrent insert committed between our check and our insert.
  */
 export async function upsertTag(
-  client: PoolClient | typeof pool,
+  client: DbClient,
   name: string,
   opts: { category?: TagCategory; createdBy?: string | null } = {}
 ): Promise<Tag> {
   const existing = await findTagByName(client, name);
   if (existing) return existing;
-  const r = await client.query<Tag>(
-    `WITH ins AS (
-       INSERT INTO public.tags (name, category, created_by)
-            VALUES ($1, $2, $3)
-       ON CONFLICT ((lower(name))) DO NOTHING
-       RETURNING *
-     )
-     SELECT * FROM ins
-     UNION ALL
-     SELECT * FROM public.tags
-      WHERE lower(name) = lower($1)
-        AND NOT EXISTS (SELECT 1 FROM ins)
-     LIMIT 1`,
+  await client.query(
+    `INSERT INTO tags (name, category, created_by)
+          VALUES ($1, $2, $3)
+     ON CONFLICT (lower(name)) DO NOTHING`,
     [name, opts.category ?? "other", opts.createdBy ?? null]
   );
-  if (r.rows[0]) return r.rows[0];
-  const raced = await findTagByName(client, name);
-  if (raced) return raced;
+  const resolved = await findTagByName(client, name);
+  if (resolved) return resolved;
   throw new Error(`upsertTag: failed to resolve tag "${name}"`);
 }
 
@@ -108,21 +90,29 @@ export async function upsertTag(
  * tag stays marked "auto" if the user keeps it). New rows are inserted with
  * source = "manual" since this path is driven by the profile editor.
  *
- * Also bumps tags.usage_count so popular-tag ranking stays accurate.
+ * Also refreshes tags.usage_count for every affected tag so popular-tag ranking
+ * stays accurate.
+ *
+ * Concurrency tradeoff: the Postgres version held a per-user `SELECT ... FOR
+ * UPDATE` lock so this read/modify/write ran atomically. D1 has no interactive
+ * transactions or row locks, so two overlapping `PUT /api/profiles/me` for the
+ * SAME user can read the same current set and apply independent inserts/deletes
+ * (e.g. [A]→[A,B] and [A]→[A,C] may settle as [A,B,C]). This is accepted for the
+ * prototype: a single user double-submitting their own profile form concurrently
+ * is rare and self-correcting on the next save. A fully serialized fix would need
+ * a per-user single-writer (e.g. a Durable Object) — out of scope here.
+ *
+ * Atomicity tradeoff: the DELETE / INSERTs / usage_count UPDATE run as separate
+ * statements (D1 has no interactive transactions), so a mid-sequence failure can
+ * leave profile_tags partially updated. Accepted for the prototype — the next
+ * successful save reconciles it. A fully atomic version would batch these via
+ * db.batch().
  */
 export async function syncProfileTags(
-  client: PoolClient,
+  client: DbClient,
   userId: string,
   rawNames: unknown[]
 ): Promise<void> {
-  // Serialize concurrent PUT /api/profiles/me for the same user. Without this
-  // lock, two transactions would both read the same currentIds and produce a
-  // union (or a stale set) of profile_tags.
-  await client.query(
-    "SELECT 1 FROM public.profiles WHERE id = $1 FOR UPDATE",
-    [userId]
-  );
-
   // Defensive: body.tags is untrusted JSON, drop non-strings before normalizing.
   const names = Array.from(
     new Set(
@@ -140,7 +130,7 @@ export async function syncProfileTags(
   }
 
   const current = await client.query<{ tag_id: string }>(
-    "SELECT tag_id FROM public.profile_tags WHERE profile_id = $1",
+    "SELECT tag_id FROM profile_tags WHERE profile_id = $1",
     [userId]
   );
   const currentIds = new Set(current.rows.map((r) => r.tag_id));
@@ -150,47 +140,32 @@ export async function syncProfileTags(
   const toInsert = [...nextIds].filter((id) => !currentIds.has(id));
 
   if (toDelete.length > 0) {
+    const inList = toDelete.map((_id, i) => `$${i + 2}`).join(", ");
     await client.query(
-      "DELETE FROM public.profile_tags WHERE profile_id = $1 AND tag_id = ANY($2::uuid[])",
-      [userId, toDelete]
+      `DELETE FROM profile_tags WHERE profile_id = $1 AND tag_id IN (${inList})`,
+      [userId, ...toDelete]
     );
   }
-  if (toInsert.length > 0) {
+  for (const tagId of toInsert) {
     await client.query(
-      `INSERT INTO public.profile_tags (profile_id, tag_id, source)
-            SELECT $1, unnest($2::uuid[]), 'manual'
+      `INSERT INTO profile_tags (profile_id, tag_id, source)
+            VALUES ($1, $2, 'manual')
        ON CONFLICT (profile_id, tag_id) DO NOTHING`,
-      [userId, toInsert]
+      [userId, tagId]
     );
   }
 
   const changed = [...toDelete, ...toInsert];
   if (changed.length > 0) {
-    // Lock affected tag rows so the subsequent usage_count writes are not
-    // overwritten by a concurrent syncProfileTags touching the same tag.
+    // A correlated count handles both "still used → real count" and "no longer
+    // used → 0" in a single statement.
+    const inList = changed.map((_id, i) => `$${i + 1}`).join(", ");
     await client.query(
-      "SELECT 1 FROM public.tags WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE",
-      [changed]
-    );
-    await client.query(
-      `UPDATE public.tags t
-          SET usage_count = sub.cnt
-         FROM (
-           SELECT tag_id, count(*)::int AS cnt
-             FROM public.profile_tags
-            WHERE tag_id = ANY($1::uuid[])
-            GROUP BY tag_id
-         ) sub
-        WHERE t.id = sub.tag_id`,
-      [changed]
-    );
-    // Tags that no longer appear in profile_tags need usage_count = 0.
-    await client.query(
-      `UPDATE public.tags t
-          SET usage_count = 0
-        WHERE t.id = ANY($1::uuid[])
-          AND NOT EXISTS (SELECT 1 FROM public.profile_tags pt WHERE pt.tag_id = t.id)`,
-      [changed]
+      `UPDATE tags
+          SET usage_count = (SELECT count(*) FROM profile_tags pt WHERE pt.tag_id = tags.id),
+              updated_at = now()
+        WHERE id IN (${inList})`,
+      [...changed]
     );
   }
 }

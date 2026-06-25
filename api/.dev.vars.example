@@ -1,0 +1,25 @@
+# Local secrets for `wrangler dev`. Copy to `.dev.vars` (gitignored) and fill in.
+# In production these are set with `wrangler secret put <NAME>` instead.
+
+# Better Auth signing secret (generate: openssl rand -base64 32)
+BETTER_AUTH_SECRET=your-better-auth-secret
+
+# Gemini API key (ai-interview / daily-question / tag-extractor)
+GEMINI_API_KEY=your-gemini-api-key
+
+# Shared secret for the cron endpoint (sent as x-cron-secret)
+CRON_SECRET=your-cron-secret
+
+# Magic-link email via Resend (optional in dev; required in production)
+# RESEND_API_KEY=re_xxxx
+# RESEND_FROM=onboarding@resend.dev
+
+# Local-dev overrides. `.dev.vars` takes precedence over wrangler.toml [vars]
+# for `wrangler dev`, so these flip the production defaults (NODE_ENV=production,
+# remote origins) back to development. Without NODE_ENV=development, auth.ts
+# takes the production branch locally: Secure cookies on http://localhost and a
+# magic-link "email not configured" error when RESEND_API_KEY is unset.
+NODE_ENV=development
+BETTER_AUTH_URL=http://localhost:8787
+BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:8080,http://localhost:5173
+CORS_ORIGINS=http://localhost:8080,http://localhost:5173
