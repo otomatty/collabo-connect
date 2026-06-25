@@ -300,7 +300,8 @@ export async function persistSuggestions(
     const inList = ids.map((_id, i) => `$${i + 1}`).join(", ");
     await db.query(
       `UPDATE tags
-          SET usage_count = (SELECT count(*) FROM profile_tags pt WHERE pt.tag_id = tags.id)
+          SET usage_count = (SELECT count(*) FROM profile_tags pt WHERE pt.tag_id = tags.id),
+              updated_at = now()
         WHERE id IN (${inList})`,
       [...ids]
     );

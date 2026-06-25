@@ -115,16 +115,31 @@ router.post("/:id/accept", requireAuth, async (c) => {
     if (!lookup.ok) {
       return c.json({ error: lookup.message }, lookup.status);
     }
-    const { suggestion } = lookup;
 
+    // Claim the suggestion FIRST (compare-and-swap on status, scoped to the
+    // owner) before any side effects. This serializes concurrent accept/reject
+    // (e.g. two tabs): only the request that flips pending→accepted proceeds; a
+    // loser sees 0 rows and returns 409. Crucially, the tag row for a
+    // proposed_name suggestion is created only AFTER a successful claim, so a
+    // lost race can never leave an orphan tag in the dictionary.
+    const claimed = await db.query<SuggestedTag>(
+      `UPDATE suggested_tags
+          SET status = 'accepted',
+              resolved_at = now()
+        WHERE id = $1 AND user_id = $2 AND status = 'pending'
+        RETURNING *`,
+      [id, userId]
+    );
+    if (claimed.rows.length === 0) {
+      return c.json({ error: "Suggested tag is not pending" }, 409);
+    }
+    const suggestion = claimed.rows[0];
+
+    // Resolve the target tag now that we own the suggestion. A surviving
+    // claimed row with a non-null tag_id always has a live tag (tag_id has
+    // ON DELETE CASCADE), so no existence re-check is needed.
     let resolvedTagId: string;
     if (suggestion.tag_id) {
-      const tagExists = await db.query("SELECT 1 FROM tags WHERE id = $1", [
-        suggestion.tag_id,
-      ]);
-      if (tagExists.rows.length === 0) {
-        return c.json({ error: "Associated tag not found" }, 404);
-      }
       resolvedTagId = suggestion.tag_id;
     } else if (suggestion.proposed_name) {
       const tag = await upsertTag(db, suggestion.proposed_name, {
@@ -132,27 +147,15 @@ router.post("/:id/accept", requireAuth, async (c) => {
         createdBy: userId,
       });
       resolvedTagId = tag.id;
+      // Backfill the link on the now-accepted suggestion.
+      await db.query("UPDATE suggested_tags SET tag_id = $2 WHERE id = $1", [
+        id,
+        resolvedTagId,
+      ]);
+      suggestion.tag_id = resolvedTagId;
     } else {
       // Schema CHECK guarantees one of tag_id / proposed_name is set.
       return c.json({ error: "Suggested tag has neither tag_id nor proposed_name" }, 500);
-    }
-
-    // Atomically claim the suggestion: a single conditional UPDATE is the
-    // compare-and-swap that serializes concurrent accept/reject (e.g. two tabs).
-    // Only the request that flips it from 'pending' proceeds; a loser sees 0
-    // affected rows and returns 409 WITHOUT inserting the profile tag, so we
-    // can't end up with an accepted-then-rejected row whose tag link lingers.
-    const claimed = await db.query<SuggestedTag>(
-      `UPDATE suggested_tags
-          SET status = 'accepted',
-              resolved_at = now(),
-              tag_id = COALESCE(tag_id, $2)
-        WHERE id = $1 AND status = 'pending'
-        RETURNING *`,
-      [id, resolvedTagId]
-    );
-    if (claimed.rows.length === 0) {
-      return c.json({ error: "Suggested tag is not pending" }, 409);
     }
 
     await db.query(
@@ -164,12 +167,13 @@ router.post("/:id/accept", requireAuth, async (c) => {
 
     await db.query(
       `UPDATE tags
-          SET usage_count = (SELECT count(*) FROM profile_tags WHERE tag_id = $1)
+          SET usage_count = (SELECT count(*) FROM profile_tags WHERE tag_id = $1),
+              updated_at = now()
         WHERE id = $1`,
       [resolvedTagId]
     );
 
-    return c.json(claimed.rows[0]);
+    return c.json(suggestion);
   } catch (err) {
     console.error("POST /api/suggested-tags/:id/accept error:", err);
     return c.json({ error: "Failed to accept suggested tag" }, 500);
