@@ -77,7 +77,7 @@ cp .env.example .env
 npm run cf:deploy   # bun run build → npx wrangler deploy
 ```
 
-> Cloudflare Pages（GitHub 連携の自動ビルド）を使う場合は、Build command を `bun run build`、
+> Cloudflare Pages（GitHub 連携の自動ビルド）を使う場合は、Build command を `npm run build`、
 > Output directory を `dist`、環境変数に `VITE_API_URL` を設定してください。
 
 ## 3. ローカル開発

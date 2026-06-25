@@ -419,8 +419,12 @@ router.put("/me", requireAuth, async (c) => {
     }
 
     if ("tags" in body) {
-      const rawTags: unknown[] = Array.isArray(body.tags) ? body.tags : [];
-      await syncProfileTags(db, userId, rawTags);
+      // Validate like `areas` so a malformed payload can't silently clear all
+      // tags (syncProfileTags would treat a non-array as "remove everything").
+      if (!Array.isArray(body.tags) || !body.tags.every((t) => typeof t === "string")) {
+        return c.json({ error: "tags must be an array of strings" }, 400);
+      }
+      await syncProfileTags(db, userId, body.tags);
     }
 
     const r = await db.query<Profile>(

@@ -16,7 +16,7 @@ router.post("/", requireAuth, async (c) => {
   };
   const questionId = body.question_id;
   const answer = body.answer;
-  if (!questionId || typeof answer !== "string") {
+  if (!questionId || typeof answer !== "string" || !answer.trim()) {
     return c.json({ error: "question_id and answer are required" }, 400);
   }
   await db.query(
@@ -38,7 +38,7 @@ router.put("/:id", requireAuth, async (c) => {
   const userId = c.get("userId")!;
   const id = c.req.param("id");
   const body = (await c.req.json().catch(() => ({}))) as { answer?: unknown };
-  if (typeof body.answer !== "string") {
+  if (typeof body.answer !== "string" || !body.answer.trim()) {
     return c.json({ error: "answer is required" }, 400);
   }
   const r = await db.query<AiQuestionResponse>(

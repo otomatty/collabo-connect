@@ -5,6 +5,7 @@ import { requireCronSecret } from "../middleware/cronAuth.js";
 import type { AppContext } from "../bindings.js";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_TIMEOUT_MS = 30_000;
 
 const FALLBACK_QUESTIONS: Array<{ question: string; options: string[] }> = [
   {
@@ -110,15 +111,23 @@ SES（システムエンジニアリングサービス）企業向けのアプ�
 新しい質問を1つ生成してください。`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const geminiRes = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 1.0, maxOutputTokens: 512, responseMimeType: "application/json" },
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  let geminiRes: Response;
+  try {
+    geminiRes = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 1.0, maxOutputTokens: 512, responseMimeType: "application/json" },
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!geminiRes.ok) {
     const errText = await geminiRes.text();
     throw new Error(`Gemini API failed: ${errText}`);
@@ -145,7 +154,12 @@ SES（システムエンジニアリングサービス）企業向けのアプ�
       };
     }
   }
-  if (!parsed.question || !Array.isArray(parsed.options) || parsed.options.length < 2) {
+  if (
+    !parsed.question?.trim() ||
+    !Array.isArray(parsed.options) ||
+    parsed.options.length !== 4 ||
+    !parsed.options.every((option) => typeof option === "string" && option.trim())
+  ) {
     throw new Error("Invalid question format from Gemini");
   }
 
@@ -195,10 +209,22 @@ export async function runGenerateDailyQuestion(
     parsed = pickFallbackQuestion(today, recentQuestions);
   }
 
+  // Atomic insert guarded by the UNIQUE(date) constraint: if a concurrent run
+  // (manual HTTP + scheduled cron) already inserted today's question, this
+  // no-ops and we return the existing row instead of creating a duplicate.
   const insert = await db.query(
-    "INSERT INTO ai_questions (question, options, date) VALUES ($1, $2, $3) RETURNING *",
+    "INSERT INTO ai_questions (question, options, date) VALUES ($1, $2, $3) ON CONFLICT (date) DO NOTHING RETURNING *",
     [parsed.question, parsed.options, today]
   );
+  if (insert.rows.length === 0) {
+    const existingRow = await db.query("SELECT * FROM ai_questions WHERE date = $1 LIMIT 1", [today]);
+    return {
+      message: "Today's question already exists",
+      date: today,
+      alreadyExists: true,
+      data: existingRow.rows[0],
+    };
+  }
   return { message: "Question generated", date: today, source, data: insert.rows[0] };
 }
 

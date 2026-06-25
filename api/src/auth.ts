@@ -7,6 +7,15 @@ import type { Env } from "./bindings.js";
 
 function createAuth(env: Env) {
   const isProduction = env.NODE_ENV === "production";
+  // Fail closed: never silently fall back to dev/localhost defaults in
+  // production. A dropped config var would otherwise emit localhost magic-link
+  // URLs and weaken cookie flags (SameSite/Secure) without anyone noticing.
+  if (!env.BETTER_AUTH_SECRET) {
+    throw new Error("BETTER_AUTH_SECRET is not set");
+  }
+  if (isProduction && !env.BETTER_AUTH_URL) {
+    throw new Error("BETTER_AUTH_URL must be set in production");
+  }
   const trustedOriginsList = parseCommaSeparatedList(env.BETTER_AUTH_TRUSTED_ORIGINS);
   const trustedOrigins = trustedOriginsList.length > 0 ? trustedOriginsList : undefined;
 
@@ -36,19 +45,32 @@ function createAuth(env: Env) {
             );
           }
           if (env.RESEND_API_KEY) {
-            const res = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${env.RESEND_API_KEY}`,
-              },
-              body: JSON.stringify({
-                from: env.RESEND_FROM ?? "onboarding@resend.dev",
-                to: email,
-                subject: "Collabo Connect ログインリンク",
-                html: getMagicLinkEmailHtml(url),
-              }),
-            });
+            // This runs on the synchronous login path; bound it so a hung Resend
+            // upstream can't keep the auth request open until the Worker timeout.
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10_000);
+            let res: Response;
+            try {
+              res = await fetch("https://api.resend.com/emails", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${env.RESEND_API_KEY}`,
+                },
+                body: JSON.stringify({
+                  from: env.RESEND_FROM ?? "onboarding@resend.dev",
+                  to: email,
+                  subject: "Collabo Connect ログインリンク",
+                  html: getMagicLinkEmailHtml(url),
+                }),
+                signal: controller.signal,
+              });
+            } catch (err) {
+              console.error("Resend request failed:", err);
+              throw new Error("Failed to send magic link email");
+            } finally {
+              clearTimeout(timeoutId);
+            }
             if (!res.ok) {
               const err = await res.text();
               console.error("Resend error:", err);

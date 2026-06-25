@@ -81,7 +81,13 @@ function translateSql(sql: string): string {
 function bindParams(sql: string, params: unknown[]): { text: string; binds: unknown[] } {
   const binds: unknown[] = [];
   const text = sql.replace(/\$(\d+)/g, (_m, n: string) => {
-    binds.push(params[Number(n) - 1]);
+    const index = Number(n) - 1;
+    if (index < 0 || index >= params.length) {
+      // pg fails loudly on a placeholder/params mismatch; mirror that instead of
+      // silently binding undefined→NULL, which would run a different query.
+      throw new Error(`Missing SQL parameter $${n}`);
+    }
+    binds.push(params[index]);
     return "?";
   });
   return { text, binds };

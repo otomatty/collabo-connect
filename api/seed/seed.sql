@@ -139,36 +139,42 @@ INSERT INTO profile_tags (profile_id, tag_id, source)
 SELECT '11111111-1111-4111-8111-111111111111', t.id, 'manual'
 FROM json_each('["React","TypeScript","甘党","AWS学習中"]') u
 JOIN tags t ON lower(t.name) = lower(u.value)
+WHERE true
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 INSERT INTO profile_tags (profile_id, tag_id, source)
 SELECT '22222222-2222-4222-8222-222222222222', t.id, 'manual'
 FROM json_each('["Java","Spring","ラーメン好き","読書家"]') u
 JOIN tags t ON lower(t.name) = lower(u.value)
+WHERE true
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 INSERT INTO profile_tags (profile_id, tag_id, source)
 SELECT '33333333-3333-4333-8333-333333333333', t.id, 'manual'
 FROM json_each('["AWS","Docker","登山","コーヒー"]') u
 JOIN tags t ON lower(t.name) = lower(u.value)
+WHERE true
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 INSERT INTO profile_tags (profile_id, tag_id, source)
 SELECT '44444444-4444-4444-8444-444444444444', t.id, 'manual'
 FROM json_each('["Next.js","Python","猫好き","ヨガ"]') u
 JOIN tags t ON lower(t.name) = lower(u.value)
+WHERE true
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 INSERT INTO profile_tags (profile_id, tag_id, source)
 SELECT '55555555-5555-4555-8555-555555555555', t.id, 'manual'
 FROM json_each('["Flutter","Swift","ゲーム好き","筋トレ"]') u
 JOIN tags t ON lower(t.name) = lower(u.value)
+WHERE true
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 INSERT INTO profile_tags (profile_id, tag_id, source)
 SELECT '66666666-6666-4666-8666-666666666666', t.id, 'manual'
 FROM json_each('["テスト自動化","Selenium","カフェ巡り","写真"]') u
 JOIN tags t ON lower(t.name) = lower(u.value)
+WHERE true
 ON CONFLICT (profile_id, tag_id) DO NOTHING;
 
 -- usage_count を全タグについて再計算（関連が無くなったタグは 0 に戻す）

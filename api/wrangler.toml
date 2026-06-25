@@ -32,7 +32,9 @@ NODE_ENV = "production"
 # first deploy / when attaching a custom domain.
 BETTER_AUTH_URL = "https://collabo-connect-api.workers.dev"
 # Frontend origins allowed to complete auth / receive the session cookie.
-BETTER_AUTH_TRUSTED_ORIGINS = "https://collabo-connect.pages.dev,http://localhost:8080,http://localhost:5173"
+# Production should list ONLY the prod frontend origin(s). localhost belongs in
+# api/.dev.vars for local dev, not in the production defaults.
+BETTER_AUTH_TRUSTED_ORIGINS = "https://collabo-connect.pages.dev"
 # CORS origins (must include the frontend origin in production).
-CORS_ORIGINS = "https://collabo-connect.pages.dev,http://localhost:8080,http://localhost:5173"
+CORS_ORIGINS = "https://collabo-connect.pages.dev"
 RESEND_FROM = "onboarding@resend.dev"

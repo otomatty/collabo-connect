@@ -9,6 +9,7 @@ import { generateAndSaveConversationTopics } from "../services/conversation-topi
 import type { AppContext } from "../bindings.js";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_TIMEOUT_MS = 30_000;
 
 interface ChatMessage {
   role: "ai" | "user";
@@ -50,11 +51,19 @@ async function callGemini(
       responseMimeType: "application/json",
     },
   };
-  const res = await fetch(buildGeminiUrl(apiKey), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(buildGeminiUrl(apiKey), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     const errText = await res.text();
     console.error("Gemini API error:", errText);
@@ -141,6 +150,21 @@ router.post("/", requireAuth, async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as RequestBody;
     const { action, profile, messages, userReply, pastResponses, personCard } = body;
 
+    // Validate up front so a malformed payload yields 400 rather than a 500 from
+    // build*Prompt(profile, ...) / messages.filter(...) downstream.
+    const isStringArray = (v: unknown): v is string[] =>
+      Array.isArray(v) && v.every((x) => typeof x === "string");
+    if (
+      !["start", "reply", "generate"].includes(action) ||
+      !profile ||
+      typeof profile !== "object" ||
+      !isStringArray(profile.areas) ||
+      !isStringArray(profile.tags) ||
+      !Array.isArray(messages)
+    ) {
+      return c.json({ error: "Invalid request body" }, 400);
+    }
+
     if (action === "start") {
       const systemPrompt = buildInterviewSystemPrompt(profile, pastResponses);
       const userPrompt = `インタビューを開始してください。まずは軽く挨拶して、最初の質問をしてください。
@@ -152,10 +176,13 @@ personCard は前回答・プロフィールから初期構築してください
         options: string[];
         personCard: string;
       };
+      if (typeof parsed.message !== "string" || !parsed.message.trim()) {
+        return c.json({ error: "Invalid response from AI" }, 502);
+      }
       return c.json({
         message: parsed.message,
-        options: parsed.options ?? [],
-        personCard: parsed.personCard ?? "",
+        options: Array.isArray(parsed.options) ? parsed.options : [],
+        personCard: typeof parsed.personCard === "string" ? parsed.personCard : "",
         done: false,
       });
     }
@@ -184,10 +211,14 @@ personCard には今回の回答で得られた新情報を追記してくださ
         options: string[];
         personCard: string;
       };
+      if (typeof parsed.message !== "string" || !parsed.message.trim()) {
+        return c.json({ error: "Invalid response from AI" }, 502);
+      }
       return c.json({
         message: parsed.message,
-        options: questionCount >= 5 ? [] : (parsed.options ?? []),
-        personCard: parsed.personCard ?? personCard ?? "",
+        options: questionCount >= 5 ? [] : Array.isArray(parsed.options) ? parsed.options : [],
+        personCard:
+          typeof parsed.personCard === "string" ? parsed.personCard : personCard ?? "",
         done: questionCount >= 5,
       });
     }

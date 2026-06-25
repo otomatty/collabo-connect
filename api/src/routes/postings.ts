@@ -8,6 +8,9 @@ import type { Posting, Profile, PostingParticipant, PostingWithDetails } from ".
 /** Posting columns stored as INTEGER booleans in D1. */
 const BOOLEAN_FIELDS = new Set(["date_undecided", "is_online"]);
 
+/** Allowed posting categories (mirrors the DB CHECK constraint). */
+const POSTING_CATEGORIES = ["food", "study", "event"];
+
 /**
  * Coerce an untrusted boolean-ish input to a real boolean before binding.
  * D1's INTEGER column would otherwise store a raw string like "false" verbatim
@@ -126,8 +129,15 @@ router.post("/", requireAuth, async (c) => {
   const userId = c.get("userId")!;
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const { title, category, date, date_undecided, area, is_online, description } = body;
-  if (!title || !category || !area) {
-    return c.json({ error: "title, category, area are required" }, 400);
+  if (
+    typeof title !== "string" || !title.trim() ||
+    typeof area !== "string" || !area.trim() ||
+    typeof category !== "string" || !POSTING_CATEGORIES.includes(category)
+  ) {
+    return c.json(
+      { error: "title and area must be non-empty strings; category must be food, study, or event" },
+      400
+    );
   }
   const r = await db.query<Posting>(
     `INSERT INTO postings (title, category, date, date_undecided, area, is_online, description, creator_id)
@@ -161,6 +171,19 @@ router.put("/:id", requireAuth, async (c) => {
     return c.json({ error: "Only creator can update" }, 403);
   }
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  // Validate provided fields before they reach the DB (an invalid category would
+  // otherwise hit the CHECK constraint and surface as a 500).
+  if (
+    "category" in body &&
+    (typeof body.category !== "string" || !POSTING_CATEGORIES.includes(body.category))
+  ) {
+    return c.json({ error: "category must be food, study, or event" }, 400);
+  }
+  for (const key of ["title", "area"] as const) {
+    if (key in body && (typeof body[key] !== "string" || !(body[key] as string).trim())) {
+      return c.json({ error: `${key} must be a non-empty string` }, 400);
+    }
+  }
   const allowed = [
     "title",
     "category",
